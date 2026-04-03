@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   IndianRupee, Users, Building2, RefreshCw, LogOut,
@@ -23,7 +23,7 @@ async function fetchAdminData() {
   const [bRes, wRes, fRes, dRes] = await Promise.all([
     supabase.from('buildings').select('*').order('name'),
     supabase.from('wings').select('*'),
-    supabase.from('flats').select('id, wing_id, status'),
+    supabase.from('flats').select('id, wing_id, status, flat_number, floor'),
     supabase.from('donations').select('*').order('created_at', { ascending: false }),
   ])
   return buildReport(bRes.data||[], wRes.data||[], fRes.data||[], dRes.data||[])
@@ -42,7 +42,7 @@ function buildReport(buildings, wings, flats, donations) {
     const flat = flats.find(f => f.id === d.flat_id)
     if (!flat || !wingStats[flat.wing_id]) return
     wingStats[flat.wing_id].amount += Number(d.amount)
-    wingStats[flat.wing_id].donations.push({ ...d, flatId: flat.id })
+    wingStats[flat.wing_id].donations.push({ ...d, flatId: flat.id, flatNumber: flat.flat_number, flatFloor: flat.floor })
   })
   const buildingStats = buildings.map(b => {
     const bWings     = wings.filter(w => w.building_id === b.id)
@@ -234,6 +234,8 @@ export default function AdminPage() {
   const [unlockConfirm, setUnlockConfirm] = useState(null)
   const [newVolunteer, setNewVolunteer]   = useState({ show:false, name:'', pin:'' })
   const [actionLoading, setActionLoading] = useState(false)
+  const [liveUpdates, setLiveUpdates]     = useState(0) // increments to trigger reload
+  const reloadTimer = useRef(null)
 
   const load = useCallback(async (quiet=false) => {
     if (!quiet) setLoading(true); else setRefreshing(true)
@@ -249,6 +251,23 @@ export default function AdminPage() {
   }, [])
 
   useEffect(()=>{load()},[load])
+
+  // Realtime: auto-reload admin data when donations or flats change
+  useEffect(()=>{
+    if (!import.meta.env.VITE_SUPABASE_URL) return
+    const channel = supabase
+      .channel('admin-live')
+      .on('postgres_changes',{event:'*',schema:'public',table:'donations'},()=>{
+        clearTimeout(reloadTimer.current)
+        reloadTimer.current = setTimeout(()=>load(true), 800)
+      })
+      .on('postgres_changes',{event:'*',schema:'public',table:'flats'},()=>{
+        clearTimeout(reloadTimer.current)
+        reloadTimer.current = setTimeout(()=>load(true), 800)
+      })
+      .subscribe()
+    return ()=>{ supabase.removeChannel(channel); clearTimeout(reloadTimer.current) }
+  },[])
 
   const handleUnlockFlat = async (donationId, flatId) => {
     setActionLoading(true)
@@ -445,22 +464,51 @@ export default function AdminPage() {
                               </div>
                             </div>
                           </div>
-                          {/* Wing donations with unlock */}
+                          {/* Wing donations — flat no + donor + collector + amount + date */}
                           {ws.donations.length > 0 && (
                             <div className="divide-y divide-gray-50">
-                              {ws.donations.map(d=>(
-                                <div key={d.id} className="px-4 py-2 flex items-center gap-2 bg-white">
-                                  <div className="flex-1 min-w-0">
-                                    <p className="text-sm font-semibold text-gray-700 truncate">{d.donor_name}</p>
-                                    <p className="text-xs text-gray-400 font-mono">{d.receipt_no}</p>
+                              {ws.donations
+                                .sort((a,b) => (a.flatFloor - b.flatFloor) || (a.flatNumber||'').localeCompare(b.flatNumber||''))
+                                .map(d=>(
+                                <div key={d.id} className="px-4 py-3 bg-white">
+                                  <div className="flex items-start gap-2.5">
+                                    {/* Flat number badge */}
+                                    <div className="w-10 h-10 rounded-xl bg-orange-100 flex flex-col items-center justify-center flex-shrink-0">
+                                      <span className="text-[9px] text-orange-400 font-semibold leading-none">FLAT</span>
+                                      <span className="text-sm font-bold text-ganesh-orange leading-tight">{d.flatNumber||'—'}</span>
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      {/* Row 1: donor name + amount */}
+                                      <div className="flex justify-between items-start gap-1">
+                                        <p className="text-sm font-bold text-gray-800 truncate flex-1">{d.donor_name}</p>
+                                        <div className="flex items-center gap-1.5 flex-shrink-0">
+                                          <p className="font-bold text-ganesh-deep text-sm">₹{fmt(d.amount)}</p>
+                                          <button
+                                            onClick={()=>setUnlockConfirm({donationId:d.id, flatId:d.flatId, name:d.donor_name})}
+                                            className="p-1.5 rounded-lg bg-red-50 text-red-500 touch-manipulation"
+                                            title="Unlock flat">
+                                            <Unlock size={13}/>
+                                          </button>
+                                        </div>
+                                      </div>
+                                      {/* Row 2: collector name */}
+                                      <p className="text-xs text-blue-600 font-semibold truncate mt-0.5">
+                                        👤 {d.collected_by || 'Unknown collector'}
+                                      </p>
+                                      {/* Row 3: receipt, payment mode, date */}
+                                      <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                                        <span className="text-[10px] text-gray-400 font-mono">{d.receipt_no}</span>
+                                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
+                                          d.payment_mode==='Cash'?'bg-green-100 text-green-700':'bg-blue-100 text-blue-700'
+                                        }`}>{d.payment_mode==='Cash'?'💵':'📲'} {d.payment_mode}</span>
+                                        {d.created_at && (
+                                          <span className="text-[10px] text-gray-400">
+                                            🕐 {new Date(d.created_at).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})}
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
                                   </div>
-                                  <p className="font-bold text-ganesh-deep text-sm flex-shrink-0">₹{fmt(d.amount)}</p>
-                                  <button
-                                    onClick={()=>setUnlockConfirm({donationId:d.id, flatId:d.flatId, name:d.donor_name})}
-                                    className="p-1.5 rounded-lg bg-red-50 text-red-500 touch-manipulation flex-shrink-0"
-                                    title="Unlock flat">
-                                    <Unlock size={14}/>
-                                  </button>
                                 </div>
                               ))}
                             </div>
