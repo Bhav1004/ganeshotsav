@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useParams, useLocation, useNavigate } from 'react-router-dom'
-import { Printer, Share2, Home, MessageCircle } from 'lucide-react'
+import { Printer, Share2, Home, MessageCircle, ImageDown } from 'lucide-react'
 import { getDonationByReceiptNo } from '../api'
 
 function formatDate(isoString) {
@@ -174,9 +174,11 @@ export default function ReceiptPage() {
   const location      = useLocation()
   const navigate      = useNavigate()
 
-  const [donation, setDonation] = useState(location.state?.donation || null)
-  const [flat, setFlat]         = useState(location.state?.flat || null)
-  const [loading, setLoading]   = useState(!location.state?.donation)
+  const [donation, setDonation]       = useState(location.state?.donation || null)
+  const [flat, setFlat]               = useState(location.state?.flat || null)
+  const [loading, setLoading]         = useState(!location.state?.donation)
+  const [shareLoading, setShareLoading] = useState(false)
+  const receiptRef = useRef(null)
 
   useEffect(() => {
     if (!donation) {
@@ -207,17 +209,51 @@ export default function ReceiptPage() {
     }
   }
 
-  const handleWhatsApp = () => {
-    const msg = encodeURIComponent(
-      `🙏 Ganeshotsav 2026 – Thank you for your donation!\n\n` +
-      `Donor: ${donation.donor_name}\n` +
-      `Amount: ₹${formatAmount(donation.amount)}\n` +
-      `Receipt No: ${donation.receipt_no}\n` +
-      `Mode: ${donation.payment_mode}\n\n` +
-      `Jai Ganesh! 🙏`
-    )
-    const phone = donation.mobile ? donation.mobile.replace(/\D/g, '') : ''
-    window.open(`https://wa.me/${phone ? '91' + phone : ''}?text=${msg}`, '_blank')
+  const captureReceiptImage = async () => {
+    const html2canvas = (await import('html2canvas')).default
+    const canvas = await html2canvas(receiptRef.current, {
+      scale: 2,
+      useCORS: true,
+      backgroundColor: '#ffffff',
+      logging: false,
+    })
+    return canvas
+  }
+
+  const handleWhatsAppImage = async () => {
+    setShareLoading(true)
+    try {
+      const canvas = await captureReceiptImage()
+      canvas.toBlob(async (blob) => {
+        const file = new File([blob], `receipt-${donation.receipt_no}.png`, { type: 'image/png' })
+        const msg  = `🙏 Ganeshotsav 2026 – Thank you for your donation!\n\nDonor: ${donation.donor_name}\nAmount: ₹${formatAmount(donation.amount)}\nReceipt No: ${donation.receipt_no}\n\nJai Ganesh! 🙏`
+
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          await navigator.share({ files: [file], text: msg })
+        } else {
+          // Fallback: download image + open WhatsApp with text
+          const url  = URL.createObjectURL(blob)
+          const a    = document.createElement('a')
+          a.href = url; a.download = `receipt-${donation.receipt_no}.png`; a.click()
+          const phone = donation.mobile ? donation.mobile.replace(/\D/g, '') : ''
+          window.open(`https://wa.me/${phone ? '91' + phone : ''}?text=${encodeURIComponent(msg)}`, '_blank')
+        }
+      }, 'image/png')
+    } catch (e) {
+      console.error('Share error:', e)
+    }
+    setShareLoading(false)
+  }
+
+  const handleDownloadImage = async () => {
+    setShareLoading(true)
+    try {
+      const canvas = await captureReceiptImage()
+      const url    = canvas.toDataURL('image/png')
+      const a      = document.createElement('a')
+      a.href = url; a.download = `receipt-${donation.receipt_no}.png`; a.click()
+    } catch(e) { console.error(e) }
+    setShareLoading(false)
   }
 
   if (loading) {
@@ -266,7 +302,7 @@ export default function ReceiptPage() {
       </div>
 
       <div className="px-4 py-4 max-w-md mx-auto">
-        <div className="receipt-container bg-white rounded-2xl shadow-xl overflow-hidden border border-orange-200">
+        <div ref={receiptRef} className="receipt-container bg-white rounded-2xl shadow-xl overflow-hidden border border-orange-200">
 
           {/* ── HEADER ────────────────────────────────────────── */}
           <div className="bg-gradient-to-br from-ganesh-deep via-ganesh-orange to-ganesh-gold text-white text-center relative overflow-hidden">
@@ -412,10 +448,17 @@ export default function ReceiptPage() {
 
         {/* ── ACTION BUTTONS ── */}
         <div className="no-print mt-4 space-y-3 pb-8">
-          <button onClick={handleWhatsApp} className="btn-success">
+          <button onClick={handleWhatsAppImage} className="btn-success" disabled={shareLoading}>
             <span className="flex items-center justify-center gap-2">
               <MessageCircle size={18} />
-              Share on WhatsApp
+              {shareLoading ? 'Preparing image…' : 'Share Receipt on WhatsApp'}
+            </span>
+          </button>
+
+          <button onClick={handleDownloadImage} className="btn-secondary" disabled={shareLoading}>
+            <span className="flex items-center justify-center gap-2">
+              <ImageDown size={16} />
+              Download Receipt Image
             </span>
           </button>
 
