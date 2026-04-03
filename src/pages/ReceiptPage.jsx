@@ -1,17 +1,16 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { useParams, useLocation, useNavigate } from 'react-router-dom'
 import { Printer, Share2, Home, MessageCircle, ImageDown, ArrowRight } from 'lucide-react'
 import { getDonationByReceiptNo, getNextPendingFlat } from '../api'
 
 function formatDate(isoString) {
+  if (!isoString) return ''
   const d = new Date(isoString)
-  return d.toLocaleDateString('en-IN', {
-    day: '2-digit', month: 'long', year: 'numeric'
-  })
+  return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' })
 }
 
 function formatAmount(amt) {
-  return Number(amt).toLocaleString('en-IN')
+  return Number(amt || 0).toLocaleString('en-IN')
 }
 
 function numberToWords(num) {
@@ -20,7 +19,7 @@ function numberToWords(num) {
     'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen']
   const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty',
     'Sixty', 'Seventy', 'Eighty', 'Ninety']
-  if (num === 0) return 'Zero'
+  if (!num || num === 0) return 'Zero'
   if (num < 20) return ones[num]
   if (num < 100) return tens[Math.floor(num / 10)] + (num % 10 ? ' ' + ones[num % 10] : '')
   if (num < 1000) return ones[Math.floor(num / 100)] + ' Hundred' + (num % 100 ? ' ' + numberToWords(num % 100) : '')
@@ -29,7 +28,6 @@ function numberToWords(num) {
   return numberToWords(Math.floor(num / 10000000)) + ' Crore' + (num % 10000000 ? ' ' + numberToWords(num % 10000000) : '')
 }
 
-/* ─── 1. Ganpati SVG Illustration ──────────────────────────────────────────── */
 function GanpatiIllustration({ size = 100 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 120 130" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -123,6 +121,7 @@ function GanpatiIllustration({ size = 100 }) {
 }
 
 /* ─── 4. Mandal Stamp SVG ───────────────────────────────────────────────────── */
+
 function MandalStamp() {
   const dotAngles = [0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330]
   return (
@@ -169,37 +168,44 @@ function MandalStamp() {
 }
 
 /* ─── Main Page ─────────────────────────────────────────────────────────────── */
-export default function ReceiptPage() {
+
+
+/* ─── Main Receipt Page ─────────────────────────────────────────────────────── */
+export default function ReceiptPage({ publicMode = false }) {
   const { receiptNo } = useParams()
   const location      = useLocation()
   const navigate      = useNavigate()
 
-  const [donation, setDonation]       = useState(location.state?.donation || null)
-  const [flat, setFlat]               = useState(location.state?.flat || null)
-  const [loading, setLoading]         = useState(!location.state?.donation)
+  const [donation, setDonation] = useState(location.state?.donation || null)
+  const [flat, setFlat]         = useState(location.state?.flat || null)
+  const [loading, setLoading]   = useState(!location.state?.donation)
+  const [loadError, setLoadError] = useState(false)
   const [shareLoading, setShareLoading] = useState(false)
-  const [nextFlat, setNextFlat]           = useState(null)
+  const [nextFlat, setNextFlat] = useState(null)
   const receiptRef = useRef(null)
 
+  // Always fetch from DB — ensures fresh data from lookup/whatsapp links
   useEffect(() => {
-    if (!donation) {
-      getDonationByReceiptNo(receiptNo).then(({ data }) => {
+    getDonationByReceiptNo(receiptNo).then(({ data, error }) => {
+      if (error || !data) {
+        if (!location.state?.donation) setLoadError(true)
+      } else {
         setDonation(data)
-        setFlat(data?.flats || null)
-        setLoading(false)
-      })
-    }
+        setFlat(data?.flats || location.state?.flat || null)
+      }
+      setLoading(false)
+    })
   }, [receiptNo])
 
-  // Fetch next pending flat in same wing
+  // Fetch next pending flat — only for logged-in volunteers, not public mode
   useEffect(() => {
+    if (publicMode || !donation) return
     const wingId = flat?.wing_id || flat?.wings?.id
-    if (wingId && flatId_) {
-      getNextPendingFlat(wingId, flatId_).then(({ data }) => setNextFlat(data))
+    const flatId = donation?.flat_id
+    if (wingId && flatId) {
+      getNextPendingFlat(wingId, flatId).then(({ data }) => setNextFlat(data || null))
     }
-  }, [flat])
-
-  const flatId_ = location.state?.flat?.id || donation?.flat_id
+  }, [donation, flat, publicMode])
 
   const handlePrint = () => window.print()
 
@@ -207,7 +213,7 @@ export default function ReceiptPage() {
     const text =
       `🙏 Ganeshotsav 2026 Donation Receipt\n\n` +
       `Donor: ${donation.donor_name}\n` +
-      `Flat: ${flat?.flat_number || donation.flat_id}\n` +
+      `Flat: ${flat?.flat_number || ''}\n` +
       `Amount: ₹${formatAmount(donation.amount)}\n` +
       `Receipt No: ${donation.receipt_no}\n` +
       `Mode: ${donation.payment_mode}\n\n` +
@@ -220,38 +226,43 @@ export default function ReceiptPage() {
     }
   }
 
-  const captureReceiptImage = async () => {
-    const html2canvas = (await import('html2canvas')).default
-    const canvas = await html2canvas(receiptRef.current, {
-      scale: 2,
-      useCORS: true,
+  // ── Image capture using html-to-image (handles SVG + fonts correctly) ──────
+  const captureImage = useCallback(async () => {
+    const { toPng } = await import('html-to-image')
+    const dataUrl = await toPng(receiptRef.current, {
+      cacheBust:       true,
+      pixelRatio:      2,
       backgroundColor: '#ffffff',
-      logging: false,
+      style:           { borderRadius: '0' },
     })
-    return canvas
-  }
+    return dataUrl
+  }, [])
 
   const handleWhatsAppImage = async () => {
     setShareLoading(true)
     try {
-      const canvas = await captureReceiptImage()
-      canvas.toBlob(async (blob) => {
-        const file = new File([blob], `receipt-${donation.receipt_no}.png`, { type: 'image/png' })
-        const msg  = `🙏 Ganeshotsav 2026 – Thank you for your donation!\n\nDonor: ${donation.donor_name}\nAmount: ₹${formatAmount(donation.amount)}\nReceipt No: ${donation.receipt_no}\n\nJai Ganesh! 🙏`
+      const dataUrl = await captureImage()
+      const res     = await fetch(dataUrl)
+      const blob    = await res.blob()
+      const file    = new File([blob], `receipt-${donation.receipt_no}.png`, { type: 'image/png' })
+      const phone   = donation.mobile ? donation.mobile.replace(/\D/g, '') : ''
+      const text    = `🙏 Ganeshotsav 2026 – Thank you for your donation!\n\nDonor: ${donation.donor_name}\nAmount: ₹${formatAmount(donation.amount)}\nReceipt No: ${donation.receipt_no}\n\nJai Ganesh! 🙏`
 
-        if (navigator.canShare && navigator.canShare({ files: [file] })) {
-          await navigator.share({ files: [file], text: msg })
-        } else {
-          // Fallback: download image + open WhatsApp with text
-          const url  = URL.createObjectURL(blob)
-          const a    = document.createElement('a')
-          a.href = url; a.download = `receipt-${donation.receipt_no}.png`; a.click()
-          const phone = donation.mobile ? donation.mobile.replace(/\D/g, '') : ''
-          window.open(`https://wa.me/${phone ? '91' + phone : ''}?text=${encodeURIComponent(msg)}`, '_blank')
-        }
-      }, 'image/png')
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], text })
+      } else {
+        // Fallback: download image first, then open WhatsApp text
+        const a = document.createElement('a')
+        a.href     = dataUrl
+        a.download = `receipt-${donation.receipt_no}.png`
+        a.click()
+        setTimeout(() => {
+          window.open(`https://wa.me/${phone ? '91' + phone : ''}?text=${encodeURIComponent(text)}`, '_blank')
+        }, 800)
+      }
     } catch (e) {
-      console.error('Share error:', e)
+      console.error('Image share error:', e)
+      alert('Could not generate image. Try Print / PDF instead.')
     }
     setShareLoading(false)
   }
@@ -259,11 +270,15 @@ export default function ReceiptPage() {
   const handleDownloadImage = async () => {
     setShareLoading(true)
     try {
-      const canvas = await captureReceiptImage()
-      const url    = canvas.toDataURL('image/png')
-      const a      = document.createElement('a')
-      a.href = url; a.download = `receipt-${donation.receipt_no}.png`; a.click()
-    } catch(e) { console.error(e) }
+      const dataUrl = await captureImage()
+      const a       = document.createElement('a')
+      a.href        = dataUrl
+      a.download    = `receipt-${donation.receipt_no}.png`
+      a.click()
+    } catch (e) {
+      console.error('Download error:', e)
+      alert('Could not generate image. Try Print / PDF instead.')
+    }
     setShareLoading(false)
   }
 
@@ -278,100 +293,91 @@ export default function ReceiptPage() {
     )
   }
 
-  if (!donation) {
+  if (loadError || !donation) {
     return (
       <div className="min-h-dvh flex items-center justify-center bg-orange-50 px-6">
         <div className="text-center">
-          <p className="text-2xl mb-2">❌</p>
-          <p className="font-bold text-gray-700">Receipt not found</p>
-          <button className="btn-primary mt-4" onClick={() => navigate('/')}>Go Home</button>
+          <p className="text-4xl mb-3">😔</p>
+          <p className="font-bold text-gray-700 mb-1">Receipt not found</p>
+          <p className="text-gray-500 text-sm mb-4">Please check the receipt number and try again.</p>
+          {publicMode
+            ? <button className="btn-primary" onClick={() => navigate('/lookup')}>← Back to Lookup</button>
+            : <button className="btn-primary" onClick={() => navigate('/')}>Go Home</button>
+          }
         </div>
       </div>
     )
   }
 
-  const flatNo        = flat?.flat_number || donation.flat_id
+  const flatNo        = flat?.flat_number || ''
   const collectorName = donation.collected_by || ''
+  const wingName      = flat?.wings?.name || flat?.wing_name || ''
+  const buildingName  = flat?.wings?.buildings?.name || flat?.building_name || ''
 
   return (
     <div className="min-h-dvh bg-gray-100">
 
-      {/* Top bar — hidden on print */}
-      <div className="no-print bg-gradient-to-r from-ganesh-deep to-ganesh-orange text-white px-4 py-3">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="font-bold">🎉 Receipt Generated!</p>
-            <p className="text-xs text-orange-100">{donation.receipt_no}</p>
+      {/* Top bar — hidden on print, hidden in public mode */}
+      {!publicMode && (
+        <div className="no-print bg-gradient-to-r from-ganesh-deep to-ganesh-orange text-white px-4 py-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="font-bold">🎉 Receipt Generated!</p>
+              <p className="text-xs text-orange-100">{donation.receipt_no}</p>
+            </div>
+            <button onClick={() => navigate('/')} className="p-2 rounded-xl bg-white/20 active:bg-white/30 touch-manipulation">
+              <Home size={20}/>
+            </button>
           </div>
-          <button
-            onClick={() => navigate('/')}
-            className="p-2 rounded-xl bg-white/20 active:bg-white/30 touch-manipulation"
-          >
-            <Home size={20} />
-          </button>
         </div>
-      </div>
+      )}
+
+      {publicMode && (
+        <div className="no-print bg-gradient-to-r from-ganesh-deep to-ganesh-orange text-white px-4 py-3 text-center">
+          <p className="font-semibold text-sm">🙏 Ganeshotsav 2026 – Donation Receipt</p>
+        </div>
+      )}
 
       <div className="px-4 py-4 max-w-md mx-auto">
+        {/* ── THE RECEIPT (this div gets captured as image) ── */}
         <div ref={receiptRef} className="receipt-container bg-white rounded-2xl shadow-xl overflow-hidden border border-orange-200">
 
-          {/* ── HEADER ────────────────────────────────────────── */}
+          {/* HEADER */}
           <div className="bg-gradient-to-br from-ganesh-deep via-ganesh-orange to-ganesh-gold text-white text-center relative overflow-hidden">
-
-            {/* Om watermark */}
-            <div
-              className="absolute inset-0 flex items-center justify-center select-none pointer-events-none"
-              style={{ opacity: 0.06 }}
-            >
+            <div className="absolute inset-0 flex items-center justify-center select-none pointer-events-none" style={{ opacity: 0.06 }}>
               <span style={{ fontSize: 170, fontFamily: 'serif', lineHeight: 1 }}>ॐ</span>
             </div>
 
-            {/* ── 2. Corner text: स्थापना left, वर्ष right ── */}
+            {/* Corner labels */}
             <div className="relative z-10 flex justify-between items-start px-4 pt-3">
               <div className="text-left bg-black/15 rounded-lg px-2 py-1">
                 <p className="text-orange-200 leading-tight" style={{ fontSize: '9px' }}>स्थापना</p>
-                <p className="font-bold text-white leading-tight text-sm"
-                   style={{ fontFamily: "'Tiro Devanagari Hindi', serif" }}>
-                  १९८४
-                </p>
+                <p className="font-bold text-white leading-tight text-sm" style={{ fontFamily: "'Tiro Devanagari Hindi', serif" }}>१९८४</p>
               </div>
               <div className="text-right bg-black/15 rounded-lg px-2 py-1">
                 <p className="text-orange-200 leading-tight" style={{ fontSize: '9px' }}>वर्ष</p>
-                <p className="font-bold text-white leading-tight text-sm"
-                   style={{ fontFamily: "'Tiro Devanagari Hindi', serif" }}>
-                  ४३ वे
-                </p>
+                <p className="font-bold text-white leading-tight text-sm" style={{ fontFamily: "'Tiro Devanagari Hindi', serif" }}>४३ वे</p>
               </div>
             </div>
 
-            {/* ── 1. Ganpati illustration (replaces elephant emoji) ── */}
+            {/* Ganpati */}
             <div className="relative z-10 flex justify-center pt-2 pb-1">
               <div style={{ filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.3))' }}>
-                <GanpatiIllustration size={108} />
+                <GanpatiIllustration size={108}/>
               </div>
             </div>
 
-            {/* Mandal name */}
             <div className="relative z-10 pb-5">
-              <h1
-                className="text-2xl font-bold leading-tight"
-                style={{
-                  fontFamily: "'Tiro Devanagari Hindi', serif",
-                  textShadow: '0 1px 3px rgba(0,0,0,0.4)',
-                }}
-              >
+              <h1 className="text-2xl font-bold leading-tight"
+                  style={{ fontFamily: "'Tiro Devanagari Hindi', serif", textShadow: '0 1px 3px rgba(0,0,0,0.4)' }}>
                 श्री गणेश उत्सव मंडळ
               </h1>
-              <p className="text-orange-100 text-sm mt-0.5">
-                {import.meta.env.VITE_MANDAL_NAME || 'Shri Ganesh Utsav Mandal'}
-              </p>
-              <p className="text-orange-200 text-xs mt-0.5">
-                {import.meta.env.VITE_MANDAL_ADDRESS || '123, Main Road, Your City'}
-              </p>
+              <p className="text-orange-100 text-sm mt-0.5">{import.meta.env.VITE_MANDAL_NAME || 'Shri Ganesh Utsav Mandal'}</p>
+              <p className="text-orange-200 text-xs mt-0.5">{import.meta.env.VITE_MANDAL_ADDRESS || '123, Main Road, Your City'}</p>
             </div>
           </div>
 
-          {/* ── RECEIPT META ── */}
+          {/* RECEIPT META */}
           <div className="bg-orange-50 border-b border-orange-200 px-5 py-2.5 flex justify-between items-center">
             <div>
               <p className="text-xs text-gray-500 uppercase tracking-wide">Receipt No.</p>
@@ -383,75 +389,49 @@ export default function ReceiptPage() {
             </div>
           </div>
 
-          {/* ── DONATION DETAILS ── */}
+          {/* DONATION DETAILS */}
           <div className="px-5 py-4 space-y-3">
-            <Row label="Donor Name"   value={donation.donor_name} bold />
-            <Row label="Flat No."     value={flatNo} />
-            {donation.mobile && <Row label="Mobile" value={donation.mobile} />}
+            <Row label="Donor Name"   value={donation.donor_name} bold/>
+            {(flatNo || wingName || buildingName) && (
+              <Row label="Flat No." value={[buildingName, wingName, flatNo].filter(Boolean).join(' › ')}/>
+            )}
+            {donation.mobile && <Row label="Mobile" value={donation.mobile}/>}
             <div className="border-t border-dashed border-orange-200 pt-3">
-              <Row label="Amount" value={`₹ ${formatAmount(donation.amount)}`} bold large />
+              <Row label="Amount" value={`₹ ${formatAmount(donation.amount)}`} bold large/>
               <p className="text-xs text-gray-400 mt-0.5 italic">
                 ({numberToWords(Number(donation.amount))} Rupees Only)
               </p>
             </div>
-            <Row label="Payment Mode" value={donation.payment_mode} />
-            {donation.transaction_id && (
-              <Row label="Transaction ID" value={donation.transaction_id} mono />
-            )}
-            {donation.collected_by && (
-              <Row label="Collected By" value={donation.collected_by} />
-            )}
+            <Row label="Payment Mode" value={donation.payment_mode}/>
+            {donation.transaction_id && <Row label="Transaction ID" value={donation.transaction_id} mono/>}
+            {donation.collected_by && <Row label="Collected By" value={donation.collected_by}/>}
           </div>
 
-          {/* ── THANK YOU ── */}
+          {/* THANK YOU */}
           <div className="bg-gradient-to-r from-orange-50 to-amber-50 border-t border-orange-200 px-5 py-3 text-center">
-            <p className="text-ganesh-deep font-bold text-base"
-               style={{ fontFamily: "'Tiro Devanagari Hindi', serif" }}>
+            <p className="text-ganesh-deep font-bold text-base" style={{ fontFamily: "'Tiro Devanagari Hindi', serif" }}>
               🙏 गणपती बाप्पा मोरया!
             </p>
-            <p className="text-gray-500 text-xs mt-1">
-              Thank you for your generous contribution to Ganeshotsav 2026
-            </p>
-            <p className="text-xs text-gray-400 mt-1">
-              {import.meta.env.VITE_MANDAL_CONTACT || '+91 98765 43210'}
-            </p>
+            <p className="text-gray-500 text-xs mt-1">Thank you for your generous contribution to Ganeshotsav 2026</p>
+            <p className="text-xs text-gray-400 mt-1">{import.meta.env.VITE_MANDAL_CONTACT || '+91 98765 43210'}</p>
           </div>
 
-          {/* ── 3 & 4. SIGNATURE + STAMP ── */}
+          {/* SIGNATURE + STAMP */}
           <div className="px-5 py-4 flex justify-between items-end border-t border-gray-100 gap-4">
-
-            {/* Collector signature block */}
             <div className="text-center min-w-[110px]">
-              {/* ── 3. Collector name shown as "signature" ── */}
               {collectorName ? (
-                <p
-                  className="text-ganesh-deep leading-tight mb-1"
-                  style={{
-                    fontFamily: "'Brush Script MT', 'Dancing Script', 'Segoe Script', cursive",
-                    fontSize: '16px',
-                    fontStyle: 'italic',
-                    whiteSpace: 'nowrap',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    maxWidth: '120px',
-                  }}
-                >
+                <p className="text-ganesh-deep leading-tight mb-1"
+                   style={{ fontFamily: "'Brush Script MT', cursive", fontSize: '16px', fontStyle: 'italic', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '120px' }}>
                   {collectorName}
                 </p>
-              ) : (
-                <div className="h-7 mb-1" />
-              )}
-              <div className="border-b-2 border-gray-500 w-28" />
+              ) : <div className="h-7 mb-1"/>}
+              <div className="border-b-2 border-gray-500 w-28"/>
               <p className="text-xs text-gray-500 mt-1">Collector's Signature</p>
             </div>
-
-            {/* ── 4. Mandal Stamp SVG ── */}
-            <div style={{ opacity: 0.82 }}>
-              <MandalStamp />
-            </div>
+            <div style={{ opacity: 0.82 }}><MandalStamp/></div>
           </div>
 
-          {/* ── FOOTER ── */}
+          {/* FOOTER */}
           <div className="bg-ganesh-deep text-white text-center py-2 px-4">
             <p className="text-xs opacity-80">Ganeshotsav 2026 · Digital Receipt System</p>
           </div>
@@ -459,55 +439,61 @@ export default function ReceiptPage() {
 
         {/* ── ACTION BUTTONS ── */}
         <div className="no-print mt-4 space-y-3 pb-8">
+
+          {/* WhatsApp image share */}
           <button onClick={handleWhatsAppImage} className="btn-success" disabled={shareLoading}>
             <span className="flex items-center justify-center gap-2">
-              <MessageCircle size={18} />
+              <MessageCircle size={18}/>
               {shareLoading ? 'Preparing image…' : 'Share Receipt on WhatsApp'}
             </span>
           </button>
 
+          {/* Download image */}
           <button onClick={handleDownloadImage} className="btn-secondary" disabled={shareLoading}>
             <span className="flex items-center justify-center gap-2">
-              <ImageDown size={16} />
-              Download Receipt Image
+              <ImageDown size={16}/> Download Receipt Image
             </span>
           </button>
 
           <div className="grid grid-cols-2 gap-3">
             <button onClick={handlePrint} className="btn-secondary">
               <span className="flex items-center justify-center gap-2">
-                <Printer size={16} /> Print / PDF
+                <Printer size={16}/> Print / PDF
               </span>
             </button>
             <button onClick={handleShare} className="btn-secondary">
               <span className="flex items-center justify-center gap-2">
-                <Share2 size={16} /> Share
+                <Share2 size={16}/> Share Text
               </span>
             </button>
           </div>
 
-          {nextFlat && (
-            <button
-              onClick={() => navigate(`/flats/${nextFlat.id}/donate`)}
-              className="btn-primary"
-            >
+          {/* Next flat – only for volunteers */}
+          {!publicMode && nextFlat && (
+            <button onClick={() => navigate(`/flats/${nextFlat.id}/donate`)} className="btn-primary">
               <span className="flex items-center justify-center gap-2">
                 Next Pending Flat ({nextFlat.flat_number}) <ArrowRight size={18}/>
               </span>
             </button>
           )}
 
-          <button
-            onClick={() => navigate(-2)}
-            className="w-full text-center text-ganesh-orange font-semibold py-2 active:opacity-70 touch-manipulation"
-          >
-            ← Back to Flat Grid
-          </button>
+          {publicMode ? (
+            <button onClick={() => navigate('/lookup')}
+              className="w-full text-center text-ganesh-orange font-semibold py-2 active:opacity-70 touch-manipulation">
+              ← Back to Receipt Lookup
+            </button>
+          ) : (
+            <button onClick={() => navigate(-2)}
+              className="w-full text-center text-ganesh-orange font-semibold py-2 active:opacity-70 touch-manipulation">
+              ← Back to Flat Grid
+            </button>
+          )}
         </div>
       </div>
     </div>
   )
 }
+
 
 function Row({ label, value, bold, large, mono }) {
   return (

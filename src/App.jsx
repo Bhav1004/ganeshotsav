@@ -27,21 +27,23 @@ function AdminRoute({ children }) {
 function AppRoutes() {
   return (
     <Routes>
-      {/* Public – no login needed */}
-      <Route path="/login"  element={<LoginPage />} />
-      <Route path="/lookup" element={<LookupPage />} />
+      {/* ── Fully public – no login needed ── */}
+      <Route path="/login"              element={<LoginPage />} />
+      <Route path="/lookup"             element={<LookupPage />} />
+      {/* Public receipt view – donors access from WhatsApp/lookup */}
+      <Route path="/receipt-view/:receiptNo" element={<ReceiptPage publicMode />} />
 
-      {/* Volunteer routes */}
-      <Route path="/"                          element={<VolunteerRoute><BuildingsPage /></VolunteerRoute>} />
+      {/* ── Volunteer routes ── */}
+      <Route path="/"                            element={<VolunteerRoute><BuildingsPage /></VolunteerRoute>} />
       <Route path="/buildings/:buildingId/wings" element={<VolunteerRoute><WingsPage /></VolunteerRoute>} />
-      <Route path="/wings/:wingId/flats"       element={<VolunteerRoute><FlatsPage /></VolunteerRoute>} />
-      <Route path="/flats/:flatId/donate"      element={<VolunteerRoute><DonationForm /></VolunteerRoute>} />
-      <Route path="/thankyou"                  element={<VolunteerRoute><ThankYouPage /></VolunteerRoute>} />
-      <Route path="/receipt/:receiptNo"        element={<VolunteerRoute><ReceiptPage /></VolunteerRoute>} />
-      <Route path="/reports"                   element={<VolunteerRoute><ReportsPage /></VolunteerRoute>} />
-      <Route path="/search"                    element={<VolunteerRoute><SearchPage /></VolunteerRoute>} />
+      <Route path="/wings/:wingId/flats"         element={<VolunteerRoute><FlatsPage /></VolunteerRoute>} />
+      <Route path="/flats/:flatId/donate"        element={<VolunteerRoute><DonationForm /></VolunteerRoute>} />
+      <Route path="/thankyou"                    element={<VolunteerRoute><ThankYouPage /></VolunteerRoute>} />
+      <Route path="/receipt/:receiptNo"          element={<VolunteerRoute><ReceiptPage /></VolunteerRoute>} />
+      <Route path="/reports"                     element={<VolunteerRoute><ReportsPage /></VolunteerRoute>} />
+      <Route path="/search"                      element={<VolunteerRoute><SearchPage /></VolunteerRoute>} />
 
-      {/* Admin routes */}
+      {/* ── Admin routes ── */}
       <Route path="/admin" element={<AdminRoute><AdminPage /></AdminRoute>} />
 
       <Route path="*" element={<Navigate to="/" replace />} />

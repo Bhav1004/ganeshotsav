@@ -136,7 +136,7 @@ export default function LookupPage() {
                 {/* View full receipt */}
                 <div className="px-4 pb-4 pt-2">
                   <button
-                    onClick={() => navigate(`/receipt/${d.receipt_no}`, { state: { donation: d, flat: d.flats } })}
+                    onClick={() => navigate(`/receipt-view/${d.receipt_no}`)}
                     className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border-2 border-ganesh-orange text-ganesh-orange font-semibold text-sm touch-manipulation active:scale-95 transition-transform"
                   >
                     <ExternalLink size={15}/> View Full Receipt & Print
