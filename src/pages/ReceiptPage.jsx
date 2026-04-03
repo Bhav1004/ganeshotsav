@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { useParams, useLocation, useNavigate } from 'react-router-dom'
-import { Printer, Share2, Home, MessageCircle, ImageDown } from 'lucide-react'
-import { getDonationByReceiptNo } from '../api'
+import { Printer, Share2, Home, MessageCircle, ImageDown, ArrowRight } from 'lucide-react'
+import { getDonationByReceiptNo, getNextPendingFlat } from '../api'
 
 function formatDate(isoString) {
   const d = new Date(isoString)
@@ -178,6 +178,7 @@ export default function ReceiptPage() {
   const [flat, setFlat]               = useState(location.state?.flat || null)
   const [loading, setLoading]         = useState(!location.state?.donation)
   const [shareLoading, setShareLoading] = useState(false)
+  const [nextFlat, setNextFlat]           = useState(null)
   const receiptRef = useRef(null)
 
   useEffect(() => {
@@ -189,6 +190,16 @@ export default function ReceiptPage() {
       })
     }
   }, [receiptNo])
+
+  // Fetch next pending flat in same wing
+  useEffect(() => {
+    const wingId = flat?.wing_id || flat?.wings?.id
+    if (wingId && flatId_) {
+      getNextPendingFlat(wingId, flatId_).then(({ data }) => setNextFlat(data))
+    }
+  }, [flat])
+
+  const flatId_ = location.state?.flat?.id || donation?.flat_id
 
   const handlePrint = () => window.print()
 
@@ -474,6 +485,17 @@ export default function ReceiptPage() {
               </span>
             </button>
           </div>
+
+          {nextFlat && (
+            <button
+              onClick={() => navigate(`/flats/${nextFlat.id}/donate`)}
+              className="btn-primary"
+            >
+              <span className="flex items-center justify-center gap-2">
+                Next Pending Flat ({nextFlat.flat_number}) <ArrowRight size={18}/>
+              </span>
+            </button>
+          )}
 
           <button
             onClick={() => navigate(-2)}

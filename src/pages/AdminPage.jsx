@@ -4,13 +4,13 @@ import {
   IndianRupee, Users, Building2, RefreshCw, LogOut,
   TrendingUp, CheckCircle2, Banknote, Smartphone,
   Download, ChevronDown, ChevronUp, Unlock, Pencil,
-  Save, X, UserX, UserCheck, Plus, ShieldCheck
+  Save, X, UserX, UserCheck, Plus, ShieldCheck, Send
 } from 'lucide-react'
 import { useCollector } from '../context/CollectorContext'
 import {
   getBuildings, getVolunteers, forceLogoutVolunteer,
   updateVolunteerAssignment, addVolunteer,
-  deleteDonationAndUnlockFlat, updateDonation,
+  deleteDonationAndUnlockFlat, updateDonation, getEODReport,
 } from '../api'
 import supabase from '../supabase'
 import { BUILDINGS, WINGS, FLATS, DONATIONS } from '../mockData'
@@ -301,6 +301,29 @@ export default function AdminPage() {
     a.href = URL.createObjectURL(blob); a.download='ganeshotsav2026.csv'; a.click()
   }
 
+  const handleEODReport = async () => {
+    const report = await getEODReport()
+    const top    = report.collectors[0]
+    const adminPhone = import.meta.env.VITE_ADMIN_WHATSAPP || ''
+    const msg =
+      `🙏 *Ganeshotsav 2026 – EOD Report*\n` +
+      `📅 ${report.date}\n\n` +
+      `💰 *Today's Collection*\n` +
+      `Total: ₹${Number(report.totalAmount).toLocaleString('en-IN')}\n` +
+      `Donations: ${report.donationCount}\n` +
+      `💵 Cash: ₹${Number(report.cashAmount).toLocaleString('en-IN')}\n` +
+      `📲 UPI: ₹${Number(report.upiAmount).toLocaleString('en-IN')}\n\n` +
+      `🏠 *Flat Progress*\n` +
+      `✅ Paid: ${report.paidFlats} / ${report.totalFlats}\n` +
+      `❌ Pending: ${report.pendingFlats}\n\n` +
+      (top ? `🏆 *Top Collector*\n${top.name}: ₹${Number(top.amount).toLocaleString('en-IN')} (${top.count} receipts)\n\n` : '') +
+      (report.collectors.length > 1
+        ? `👥 *All Collectors*\n` + report.collectors.map(c => `• ${c.name}: ₹${Number(c.amount).toLocaleString('en-IN')}`).join('\n') + '\n\n'
+        : '') +
+      `Jai Ganesh! 🐘`
+    window.open(`https://wa.me/${adminPhone}?text=${encodeURIComponent(msg)}`, '_blank')
+  }
+
   const handleLogout = () => { logout(); navigate('/login',{replace:true}) }
 
   const TABS = [
@@ -322,7 +345,10 @@ export default function AdminPage() {
           <button onClick={()=>load(true)} className="p-2 rounded-xl bg-white/20 touch-manipulation">
             <RefreshCw size={18} className={refreshing?'animate-spin':''}/>
           </button>
-          <button onClick={exportCSV} className="p-2 rounded-xl bg-white/20 touch-manipulation">
+          <button onClick={handleEODReport} className="p-2 rounded-xl bg-white/20 touch-manipulation" title="Send EOD Report to WhatsApp">
+            <Send size={18}/>
+          </button>
+          <button onClick={exportCSV} className="p-2 rounded-xl bg-white/20 touch-manipulation" title="Export CSV">
             <Download size={18}/>
           </button>
           <button onClick={handleLogout} className="p-2 rounded-xl bg-white/20 touch-manipulation">

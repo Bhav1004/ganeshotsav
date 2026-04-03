@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { IndianRupee, Smartphone, User, Hash, CreditCard, Ban } from 'lucide-react'
+import { IndianRupee, Smartphone, User, Hash, CreditCard, Ban, StickyNote, ChevronDown } from 'lucide-react'
 import Header from '../components/Header'
 import Spinner from '../components/Spinner'
 import UpiQR from '../components/UpiQR'
-import { getFlatById, submitDonation, refuseFlat } from '../api'
+import { getFlatById, submitDonation, refuseFlat, updateFlatNote } from '../api'
 import { useCollector } from '../context/CollectorContext'
 
-const PRESET_AMOUNTS = [101, 201, 501, 1001, 2001, 5001]
+const PRESET_AMOUNTS   = [101, 201, 501, 1001, 2001, 5001]
+const QUICK_NOTES      = ['Not Home', 'Call First', 'Visit Again Tomorrow', 'Empty / Vacant', 'Already Donated Elsewhere']
 
 export default function DonationForm() {
   const { flatId } = useParams()
@@ -20,22 +21,38 @@ export default function DonationForm() {
   const [refusing, setRefusing]     = useState(false)
   const [error, setError]           = useState('')
   const [showRefuseConfirm, setShowRefuseConfirm] = useState(false)
+  const [showNotes, setShowNotes]   = useState(false)
+  const [note, setNote]             = useState('')
+  const [savingNote, setSavingNote] = useState(false)
 
   const [form, setForm] = useState({
     donor_name: '', mobile: '', amount: '', payment_mode: 'Cash', transaction_id: '',
   })
 
   useEffect(() => {
-    getFlatById(flatId).then(({ data }) => { setFlat(data); setLoading(false) })
+    getFlatById(flatId).then(({ data }) => {
+      setFlat(data)
+      setNote(data?.notes || '')
+      if (data?.notes) setShowNotes(true)
+      setLoading(false)
+    })
   }, [flatId])
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
+
+  const handleSaveNote = async () => {
+    setSavingNote(true)
+    await updateFlatNote(flatId, note)
+    setSavingNote(false)
+  }
 
   const handleSubmit = async () => {
     setError('')
     if (!form.donor_name.trim()) return setError('Donor name is required')
     if (!form.amount || Number(form.amount) <= 0) return setError('Valid amount is required')
     setSubmitting(true)
+    // Save note if any before submitting
+    if (note.trim()) await updateFlatNote(flatId, note)
     const { data, error: err } = await submitDonation({
       flat_id: flatId, donor_name: form.donor_name.trim(),
       mobile: form.mobile.trim(), amount: Number(form.amount),
@@ -44,11 +61,13 @@ export default function DonationForm() {
     })
     setSubmitting(false)
     if (err) return setError(err.message || 'Failed to save. Please try again.')
-    navigate(`/receipt/${data.receipt_no}`, { state: { donation: data, flat } })
+    // Navigate to ThankYou first
+    navigate('/thankyou', { state: { receiptNo: data.receipt_no, donation: data, flat } })
   }
 
   const handleRefuse = async () => {
     setRefusing(true)
+    if (note.trim()) await updateFlatNote(flatId, note)
     await refuseFlat(flatId, collectorName)
     setRefusing(false)
     navigate(-1)
@@ -68,11 +87,11 @@ export default function DonationForm() {
       </div>
 
       <div className="px-4 py-4 space-y-4 pb-10">
+
         {alreadyPaid && (
           <div className="bg-green-50 border-2 border-green-300 rounded-2xl p-4 text-center">
             <p className="text-2xl mb-1">✅</p>
             <p className="font-bold text-green-700">Already Paid!</p>
-            <p className="text-sm text-green-600">This flat has already been collected.</p>
             <button className="mt-3 btn-secondary" onClick={() => navigate(-1)}>Go Back</button>
           </div>
         )}
@@ -81,13 +100,51 @@ export default function DonationForm() {
           <div className="bg-gray-50 border-2 border-gray-300 rounded-2xl p-4 text-center">
             <p className="text-2xl mb-1">🚫</p>
             <p className="font-bold text-gray-700">Marked as Refused</p>
-            <p className="text-sm text-gray-500">Owner refused to donate.</p>
+            {flat?.notes && <p className="text-sm text-gray-500 mt-1 italic">"{flat.notes}"</p>}
             <button className="mt-3 btn-secondary" onClick={() => navigate(-1)}>Go Back</button>
           </div>
         )}
 
         {!alreadyPaid && !alreadyRefused && (
           <>
+            {/* ── Notes section ── */}
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl overflow-hidden">
+              <button
+                onClick={() => setShowNotes(s => !s)}
+                className="w-full flex items-center justify-between px-4 py-3 touch-manipulation"
+              >
+                <span className="flex items-center gap-2 text-amber-700 font-semibold text-sm">
+                  <StickyNote size={15}/>
+                  📝 Add Note {note && <span className="bg-amber-200 text-amber-800 text-xs px-2 py-0.5 rounded-full">Saved</span>}
+                </span>
+                <ChevronDown size={16} className={`text-amber-500 transition-transform ${showNotes ? 'rotate-180' : ''}`}/>
+              </button>
+              {showNotes && (
+                <div className="px-4 pb-4 space-y-2">
+                  {/* Quick chips */}
+                  <div className="flex flex-wrap gap-1.5">
+                    {QUICK_NOTES.map(n => (
+                      <button key={n} onClick={() => setNote(n)}
+                        className={`text-xs px-3 py-1.5 rounded-full border transition-all touch-manipulation ${
+                          note === n ? 'bg-amber-400 text-white border-amber-400' : 'bg-white text-amber-700 border-amber-300'
+                        }`}>{n}</button>
+                    ))}
+                  </div>
+                  <textarea
+                    className="w-full border-2 border-amber-200 rounded-xl px-3 py-2 text-sm bg-white resize-none focus:outline-none focus:border-amber-400"
+                    rows={2}
+                    placeholder="Or type a custom note…"
+                    value={note}
+                    onChange={e => setNote(e.target.value)}
+                  />
+                  <button onClick={handleSaveNote} disabled={savingNote}
+                    className="text-xs text-amber-700 font-semibold bg-amber-100 px-3 py-1.5 rounded-lg touch-manipulation">
+                    {savingNote ? 'Saving…' : '💾 Save Note'}
+                  </button>
+                </div>
+              )}
+            </div>
+
             {/* Donor Name */}
             <div>
               <label className="text-sm font-semibold text-gray-700 mb-1.5 flex items-center gap-1.5">
@@ -104,7 +161,7 @@ export default function DonationForm() {
               </label>
               <input className="input-field" placeholder="10-digit mobile number"
                 type="tel" inputMode="numeric" maxLength={10}
-                value={form.mobile} onChange={e => set('mobile', e.target.value.replace(/\D/g, ''))}/>
+                value={form.mobile} onChange={e => set('mobile', e.target.value.replace(/\D/g,''))}/>
             </div>
 
             {/* Amount */}
@@ -131,15 +188,13 @@ export default function DonationForm() {
                 <CreditCard size={15}/> Payment Mode *
               </label>
               <div className="grid grid-cols-2 gap-3">
-                {['Cash', 'UPI'].map(mode => (
+                {['Cash','UPI'].map(mode => (
                   <button key={mode} onClick={() => set('payment_mode', mode)}
                     className={`py-4 rounded-xl font-bold text-base border-2 transition-all touch-manipulation ${
                       form.payment_mode === mode
                         ? mode === 'Cash' ? 'bg-green-500 text-white border-green-500 shadow-lg' : 'bg-blue-500 text-white border-blue-500 shadow-lg'
                         : 'bg-white text-gray-600 border-gray-200'
-                    }`}>
-                    {mode === 'Cash' ? '💵 Cash' : '📲 UPI'}
-                  </button>
+                    }`}>{mode === 'Cash' ? '💵 Cash' : '📲 UPI'}</button>
                 ))}
               </div>
             </div>
@@ -167,7 +222,7 @@ export default function DonationForm() {
               {submitting ? '⏳ Saving…' : '✅ Save & Generate Receipt'}
             </button>
 
-            {/* Refuse button */}
+            {/* Refuse */}
             {!showRefuseConfirm ? (
               <button onClick={() => setShowRefuseConfirm(true)}
                 className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-dashed border-gray-300 text-gray-500 font-semibold text-sm active:scale-95 transition-transform touch-manipulation">
@@ -175,14 +230,10 @@ export default function DonationForm() {
               </button>
             ) : (
               <div className="bg-gray-50 border-2 border-gray-300 rounded-2xl p-4">
-                <p className="font-semibold text-gray-700 text-center mb-3">
-                  🚫 Confirm: Owner refused to donate?
-                </p>
+                <p className="font-semibold text-gray-700 text-center mb-3">🚫 Confirm: Owner refused to donate?</p>
                 <div className="grid grid-cols-2 gap-3">
                   <button onClick={() => setShowRefuseConfirm(false)}
-                    className="py-2.5 rounded-xl border-2 border-gray-300 font-semibold text-gray-600 text-sm touch-manipulation">
-                    Cancel
-                  </button>
+                    className="py-2.5 rounded-xl border-2 border-gray-300 font-semibold text-gray-600 text-sm touch-manipulation">Cancel</button>
                   <button onClick={handleRefuse} disabled={refusing}
                     className="py-2.5 rounded-xl bg-gray-500 text-white font-semibold text-sm touch-manipulation">
                     {refusing ? 'Saving…' : 'Yes, Refused'}
