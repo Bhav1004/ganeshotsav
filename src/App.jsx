@@ -8,6 +8,7 @@ import DonationForm  from './pages/DonationForm'
 import ReceiptPage   from './pages/ReceiptPage'
 import ReportsPage   from './pages/ReportsPage'
 import AdminPage     from './pages/AdminPage'
+import SearchPage    from './pages/SearchPage'
 
 function VolunteerRoute({ children }) {
   const { collectorName } = useCollector()
@@ -31,6 +32,7 @@ function AppRoutes() {
       <Route path="/flats/:flatId/donate" element={<VolunteerRoute><DonationForm /></VolunteerRoute>} />
       <Route path="/receipt/:receiptNo" element={<VolunteerRoute><ReceiptPage /></VolunteerRoute>} />
       <Route path="/reports" element={<VolunteerRoute><ReportsPage /></VolunteerRoute>} />
+      <Route path="/search" element={<VolunteerRoute><SearchPage /></VolunteerRoute>} />
       <Route path="/admin" element={<AdminRoute><AdminPage /></AdminRoute>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

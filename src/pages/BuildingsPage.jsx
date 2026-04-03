@@ -1,17 +1,19 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Building2, ChevronRight, BarChart3 } from 'lucide-react'
+import { Building2, ChevronRight, BarChart3, Search } from 'lucide-react'
 import Header from '../components/Header'
 import Spinner from '../components/Spinner'
 import { getBuildings } from '../api'
+import { useCollector } from '../context/CollectorContext'
 
 export default function BuildingsPage() {
   const [buildings, setBuildings] = useState([])
   const [loading, setLoading]     = useState(true)
   const navigate = useNavigate()
+  const { assignedBuildings } = useCollector()
 
   useEffect(() => {
-    getBuildings().then(({ data }) => {
+    getBuildings(assignedBuildings).then(({ data }) => {
       setBuildings(data || [])
       setLoading(false)
     })
@@ -20,26 +22,16 @@ export default function BuildingsPage() {
   return (
     <div className="min-h-dvh bg-orange-50">
       <Header title="🏢 Select Building" showBack={false} showReports />
-
-      {/* Banner */}
-      <div className="bg-gradient-to-r from-ganesh-deep to-ganesh-orange text-white px-4 pb-5 pt-1">
-        <p className="text-orange-100 text-sm text-center">
-          🙏 Bal Gopal Mitra Mandal Ganeshotsav 2026 – वर्गणी (Donation)
-        </p>
+      <div className="bg-gradient-to-r from-ganesh-deep to-ganesh-orange text-white px-4 pb-4 pt-1">
+        <p className="text-orange-100 text-sm text-center">🙏 Ganeshotsav 2026 – Donation Collection</p>
       </div>
 
       <div className="px-4 py-4">
-        {loading ? (
-          <Spinner text="Loading buildings…" />
-        ) : (
+        {loading ? <Spinner text="Loading buildings…" /> : (
           <div className="space-y-2">
-            {buildings.map((b, i) => (
-              <button
-                key={b.id}
-                onClick={() => navigate(`/buildings/${b.id}/wings`)}
-                className="w-full card flex items-center gap-4 active:scale-98 transition-transform touch-manipulation"
-                style={{ animationDelay: `${i * 30}ms` }}
-              >
+            {buildings.map((b) => (
+              <button key={b.id} onClick={() => navigate(`/buildings/${b.id}/wings`)}
+                className="w-full card flex items-center gap-4 active:scale-98 transition-transform touch-manipulation">
                 <div className="w-12 h-12 rounded-xl bg-orange-100 flex items-center justify-center flex-shrink-0">
                   <Building2 size={24} className="text-ganesh-orange" />
                 </div>
@@ -53,14 +45,16 @@ export default function BuildingsPage() {
           </div>
         )}
 
-        {/* Reports shortcut */}
-        <button
-          onClick={() => navigate('/reports')}
-          className="mt-6 w-full flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-dashed border-orange-300 text-ganesh-orange font-semibold text-sm active:scale-95 transition-transform touch-manipulation"
-        >
-          <BarChart3 size={18} />
-          View Collection Report (हिशोब)
-        </button>
+        <div className="mt-4 space-y-2">
+          <button onClick={() => navigate('/search')}
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-dashed border-blue-300 text-blue-600 font-semibold text-sm active:scale-95 transition-transform touch-manipulation">
+            <Search size={18} /> Search Donor / Receipt
+          </button>
+          <button onClick={() => navigate('/reports')}
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-dashed border-orange-300 text-ganesh-orange font-semibold text-sm active:scale-95 transition-transform touch-manipulation">
+            <BarChart3 size={18} /> View Collection Report (हिशोब)
+          </button>
+        </div>
       </div>
     </div>
   )

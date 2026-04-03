@@ -1,45 +1,35 @@
 import supabase from './supabase'
-import {
-  BUILDINGS, WINGS, FLATS, DONATIONS, nextReceiptNo
-} from './mockData'
+import { BUILDINGS, WINGS, FLATS, DONATIONS, nextReceiptNo } from './mockData'
 
 const useMock = !import.meta.env.VITE_SUPABASE_URL
 
 // ─── Buildings ────────────────────────────────────────────────────────────────
-export async function getBuildings() {
-  if (useMock) return { data: BUILDINGS, error: null }
-  return supabase.from('buildings').select('*').order('name')
+export async function getBuildings(assignedIds = []) {
+  if (useMock) {
+    const data = assignedIds.length
+      ? BUILDINGS.filter(b => assignedIds.includes(b.id))
+      : BUILDINGS
+    return { data, error: null }
+  }
+  let q = supabase.from('buildings').select('*').order('name')
+  if (assignedIds.length) q = q.in('id', assignedIds)
+  return q
 }
 
 // ─── Wings ────────────────────────────────────────────────────────────────────
 export async function getWings(buildingId) {
-  if (useMock) {
-    return {
-      data: WINGS.filter(w => w.building_id === buildingId),
-      error: null,
-    }
-  }
-  return supabase
-    .from('wings')
-    .select('*')
-    .eq('building_id', buildingId)
-    .order('name')
+  if (useMock) return { data: WINGS.filter(w => w.building_id === buildingId), error: null }
+  return supabase.from('wings').select('*').eq('building_id', buildingId).order('name')
 }
 
 // ─── Flats ────────────────────────────────────────────────────────────────────
 export async function getFlats(wingId) {
-  if (useMock) {
-    return {
-      data: FLATS.filter(f => f.wing_id === wingId),
-      error: null,
-    }
-  }
+  if (useMock) return { data: FLATS.filter(f => f.wing_id === wingId), error: null }
   return supabase
     .from('flats')
     .select('*, donations(id, receipt_no, amount, donor_name, payment_mode, created_at)')
     .eq('wing_id', wingId)
-    .order('floor')
-    .order('flat_number')
+    .order('floor').order('flat_number')
 }
 
 export async function getFlatById(flatId) {
@@ -47,79 +37,149 @@ export async function getFlatById(flatId) {
     const flat = FLATS.find(f => f.id === flatId)
     return { data: flat, error: flat ? null : new Error('Not found') }
   }
-  const { data, error } = await supabase
-    .from('flats')
+  return supabase.from('flats')
     .select('*, wings(name, buildings(name))')
-    .eq('id', flatId)
-    .single()
-  return { data, error }
+    .eq('id', flatId).single()
+}
+
+export async function setFlatStatus(flatId, status) {
+  if (useMock) {
+    const flat = FLATS.find(f => f.id === flatId)
+    if (flat) flat.status = status
+    return { error: null }
+  }
+  return supabase.from('flats').update({ status }).eq('id', flatId)
 }
 
 // ─── Donations ────────────────────────────────────────────────────────────────
 export async function submitDonation(payload) {
   if (useMock) {
     const receiptNo = nextReceiptNo()
-    const donation = {
-      id:             crypto.randomUUID(),
-      receipt_no:     receiptNo,
-      created_at:     new Date().toISOString(),
-      ...payload,
-    }
+    const donation  = { id: crypto.randomUUID(), receipt_no: receiptNo, created_at: new Date().toISOString(), ...payload }
     DONATIONS.push(donation)
-
-    // Mark flat paid in mock store
     const flat = FLATS.find(f => f.id === payload.flat_id)
     if (flat) flat.status = 'paid'
-
     return { data: donation, error: null }
   }
-
-  // 1. Generate receipt number via Supabase RPC
-  const { data: receiptData, error: rpcError } = await supabase
-    .rpc('next_receipt_number')
+  const { data: receiptData, error: rpcError } = await supabase.rpc('next_receipt_number')
   if (rpcError) return { data: null, error: rpcError }
-
-  const receiptNo = receiptData
-
-  // 2. Insert donation
   const { data: donation, error: donErr } = await supabase
-    .from('donations')
-    .insert({ ...payload, receipt_no: receiptNo })
-    .select()
-    .single()
+    .from('donations').insert({ ...payload, receipt_no: receiptData }).select().single()
   if (donErr) return { data: null, error: donErr }
-
-  // 3. Mark flat as paid
-  await supabase
-    .from('flats')
-    .update({ status: 'paid' })
-    .eq('id', payload.flat_id)
-
+  await supabase.from('flats').update({ status: 'paid' }).eq('id', payload.flat_id)
   return { data: donation, error: null }
 }
 
 export async function getDonationByReceiptNo(receiptNo) {
+  if (useMock) return { data: DONATIONS.find(x => x.receipt_no === receiptNo) || null, error: null }
+  return supabase.from('donations')
+    .select('*, flats(flat_number, wings(name, buildings(name)))')
+    .eq('receipt_no', receiptNo).single()
+}
+
+export async function getDonationByFlatId(flatId) {
+  if (useMock) return { data: DONATIONS.find(d => d.flat_id === flatId) || null, error: null }
+  return supabase.from('donations').select('*').eq('flat_id', flatId).maybeSingle()
+}
+
+export async function updateDonation(id, updates) {
   if (useMock) {
-    const d = DONATIONS.find(x => x.receipt_no === receiptNo)
-    return { data: d || null, error: null }
+    const d = DONATIONS.find(x => x.id === id)
+    if (d) Object.assign(d, updates)
+    return { error: null }
   }
-  return supabase
+  return supabase.from('donations').update(updates).eq('id', id)
+}
+
+export async function deleteDonationAndUnlockFlat(donationId, flatId, adminName = 'admin') {
+  if (useMock) {
+    const idx = DONATIONS.findIndex(d => d.id === donationId)
+    if (idx !== -1) DONATIONS.splice(idx, 1)
+    const flat = FLATS.find(f => f.id === flatId)
+    if (flat) flat.status = 'pending'
+    return { error: null }
+  }
+  const { error: delErr } = await supabase.from('donations').delete().eq('id', donationId)
+  if (delErr) return { error: delErr }
+  await supabase.from('flats').update({ status: 'pending' }).eq('id', flatId)
+  await supabase.from('audit_log').insert({
+    action: 'UNLOCK_FLAT', entity_type: 'flat', entity_id: flatId,
+    details: { donation_id: donationId }, done_by: adminName,
+  })
+  return { error: null }
+}
+
+export async function refuseFlat(flatId, collectorName) {
+  if (useMock) {
+    const flat = FLATS.find(f => f.id === flatId)
+    if (flat) flat.status = 'refused'
+    return { error: null }
+  }
+  await supabase.from('flats').update({ status: 'refused' }).eq('id', flatId)
+  await supabase.from('audit_log').insert({
+    action: 'FLAT_REFUSED', entity_type: 'flat', entity_id: flatId,
+    details: { collector: collectorName }, done_by: collectorName,
+  })
+  return { error: null }
+}
+
+// ─── Search ───────────────────────────────────────────────────────────────────
+export async function searchDonations(query) {
+  if (!query || query.trim().length < 2) return { data: [], error: null }
+  const q = query.trim()
+  if (useMock) {
+    const results = DONATIONS.filter(d =>
+      d.donor_name?.toLowerCase().includes(q.toLowerCase()) ||
+      d.mobile?.includes(q) ||
+      d.receipt_no?.toLowerCase().includes(q.toLowerCase())
+    )
+    return { data: results, error: null }
+  }
+  const { data, error } = await supabase
     .from('donations')
     .select('*, flats(flat_number, wings(name, buildings(name)))')
-    .eq('receipt_no', receiptNo)
-    .single()
+    .or(`donor_name.ilike.%${q}%,mobile.ilike.%${q}%,receipt_no.ilike.%${q}%`)
+    .order('created_at', { ascending: false })
+    .limit(30)
+  return { data: data || [], error }
+}
+
+// ─── Volunteers ───────────────────────────────────────────────────────────────
+export async function getVolunteers() {
+  if (useMock) return {
+    data: [
+      { id: '1', name: 'Rahul Sharma',   pin: '1234', logged_in: false, is_active: true, assigned_buildings: [] },
+      { id: '2', name: 'Priya Patil',    pin: '2345', logged_in: false, is_active: true, assigned_buildings: [] },
+      { id: '3', name: 'Amit Desai',     pin: '3456', logged_in: false, is_active: true, assigned_buildings: [] },
+    ], error: null
+  }
+  return supabase.from('volunteers').select('*').order('name')
+}
+
+export async function forceLogoutVolunteer(volunteerId) {
+  if (useMock) return { error: null }
+  return supabase.from('volunteers')
+    .update({ logged_in: false, session_token: null })
+    .eq('id', volunteerId)
+}
+
+export async function updateVolunteerAssignment(volunteerId, buildingIds) {
+  if (useMock) return { error: null }
+  return supabase.from('volunteers')
+    .update({ assigned_buildings: buildingIds })
+    .eq('id', volunteerId)
+}
+
+export async function addVolunteer(name, pin) {
+  if (useMock) return { error: null }
+  return supabase.from('volunteers').insert({ name, pin, is_active: true })
 }
 
 // ─── Reports ─────────────────────────────────────────────────────────────────
 export async function getReportData() {
   if (useMock) {
-    const totalDonations = DONATIONS.length
-    const totalAmount    = DONATIONS.reduce((s, d) => s + Number(d.amount), 0)
-    const cashTotal      = DONATIONS.filter(d => d.payment_mode === 'Cash')
-      .reduce((s, d) => s + Number(d.amount), 0)
-    const upiTotal       = DONATIONS.filter(d => d.payment_mode === 'UPI')
-      .reduce((s, d) => s + Number(d.amount), 0)
-
+    const totalAmount = DONATIONS.reduce((s, d) => s + Number(d.amount), 0)
+    const cashTotal   = DONATIONS.filter(d => d.payment_mode === 'Cash').reduce((s, d) => s + Number(d.amount), 0)
     const byCollector = {}
     DONATIONS.forEach(d => {
       const k = d.collected_by || 'Unknown'
@@ -127,40 +187,25 @@ export async function getReportData() {
       byCollector[k].count++
       byCollector[k].amount += Number(d.amount)
     })
-
-    const totalFlats = FLATS.length
-    const paidFlats  = FLATS.filter(f => f.status === 'paid').length
-
-    return {
-      data: {
-        totalDonations,
-        totalAmount,
-        cashTotal,
-        upiTotal,
-        byCollector: Object.values(byCollector),
-        totalFlats,
-        paidFlats,
-        pendingFlats: totalFlats - paidFlats,
-      },
-      error: null,
-    }
+    return { data: {
+      totalDonations: DONATIONS.length, totalAmount, cashTotal,
+      upiTotal: totalAmount - cashTotal,
+      byCollector: Object.values(byCollector),
+      totalFlats: FLATS.length,
+      paidFlats: FLATS.filter(f => f.status === 'paid').length,
+      refusedFlats: FLATS.filter(f => f.status === 'refused').length,
+      pendingFlats: FLATS.filter(f => f.status === 'pending').length,
+    }, error: null }
   }
-
   const [donRes, flatRes] = await Promise.all([
     supabase.from('donations').select('amount, payment_mode, collected_by'),
     supabase.from('flats').select('status'),
   ])
-
   if (donRes.error) return { data: null, error: donRes.error }
-
-  const donations  = donRes.data || []
-  const flats      = flatRes.data || []
+  const donations   = donRes.data || []
+  const flats       = flatRes.data || []
   const totalAmount = donations.reduce((s, d) => s + Number(d.amount), 0)
-  const cashTotal   = donations.filter(d => d.payment_mode === 'Cash')
-    .reduce((s, d) => s + Number(d.amount), 0)
-  const upiTotal    = donations.filter(d => d.payment_mode === 'UPI')
-    .reduce((s, d) => s + Number(d.amount), 0)
-
+  const cashTotal   = donations.filter(d => d.payment_mode === 'Cash').reduce((s, d) => s + Number(d.amount), 0)
   const byCollectorMap = {}
   donations.forEach(d => {
     const k = d.collected_by || 'Unknown'
@@ -168,20 +213,13 @@ export async function getReportData() {
     byCollectorMap[k].count++
     byCollectorMap[k].amount += Number(d.amount)
   })
-
-  const paidFlats = flats.filter(f => f.status === 'paid').length
-
-  return {
-    data: {
-      totalDonations: donations.length,
-      totalAmount,
-      cashTotal,
-      upiTotal,
-      byCollector:  Object.values(byCollectorMap),
-      totalFlats:   flats.length,
-      paidFlats,
-      pendingFlats: flats.length - paidFlats,
-    },
-    error: null,
-  }
+  return { data: {
+    totalDonations: donations.length, totalAmount, cashTotal,
+    upiTotal: totalAmount - cashTotal,
+    byCollector: Object.values(byCollectorMap),
+    totalFlats: flats.length,
+    paidFlats:    flats.filter(f => f.status === 'paid').length,
+    refusedFlats: flats.filter(f => f.status === 'refused').length,
+    pendingFlats: flats.filter(f => f.status === 'pending').length,
+  }, error: null }
 }
