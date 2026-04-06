@@ -73,7 +73,7 @@ export default function ThankYouPage() {
           Thank you for your generous contribution!
         </p>
         <p className="text-orange-200 text-sm mt-1">
-          Shri Ganesh Utsav Mandal 2026
+          बाल गोपाळ मित्र मंडळ
         </p>
       </div>
 

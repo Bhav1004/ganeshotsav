@@ -51,5 +51,5 @@ export const DONATIONS = []
 
 let receiptCounter = 1
 export function nextReceiptNo() {
-  return `GS2026-${String(receiptCounter++).padStart(5, '0')}`
+  return `BGMM${String(receiptCounter++).padStart(5, '0')}`
 }

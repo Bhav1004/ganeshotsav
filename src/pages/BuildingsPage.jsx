@@ -23,7 +23,7 @@ export default function BuildingsPage() {
     <div className="min-h-dvh bg-orange-50">
       <Header title="🏢 Select Building" showBack={false} showReports />
       <div className="bg-gradient-to-r from-ganesh-deep to-ganesh-orange text-white px-4 pb-4 pt-1">
-        <p className="text-orange-100 text-sm text-center">🙏 Ganeshotsav 2026 – Donation Collection</p>
+        <p className="text-orange-100 text-sm text-center">🙏 BGMM Ganeshotsav 2026 – Donation Collection</p>
       </div>
 
       <div className="px-4 py-4">

@@ -42,7 +42,7 @@ export default function LookupPage() {
         <h1 className="font-bold text-xl" style={{ fontFamily: "'Tiro Devanagari Hindi', serif" }}>
           Receipt Lookup
         </h1>
-        <p className="text-orange-100 text-sm mt-1">Shri Ganesh Utsav Mandal 2026</p>
+        <p className="text-orange-100 text-sm mt-1">बाल गोपाळ मित्र मंडळ 2026</p>
       </div>
 
       <div className="px-4 py-5 max-w-md mx-auto">
@@ -109,7 +109,7 @@ export default function LookupPage() {
                   <p className="font-bold text-lg" style={{ fontFamily: "'Tiro Devanagari Hindi', serif" }}>
                     श्री गणेश उत्सव मंडळ
                   </p>
-                  <p className="text-orange-100 text-xs">Ganeshotsav 2026</p>
+                  <p className="text-orange-100 text-xs">BGMM Ganeshotsav 2026</p>
                 </div>
 
                 <div className="px-4 py-4 space-y-2.5">
@@ -160,7 +160,7 @@ export default function LookupPage() {
       </div>
 
       <p className="text-center text-xs text-gray-400 pb-8">
-        Shri Ganesh Utsav Mandal · Est. 1984 · Ganeshotsav 2026
+        बाल गोपाळ मित्र मंडळ · स्था. १९८४ · BGMM Ganeshotsav 2026
       </p>
     </div>
   )

@@ -45,10 +45,10 @@ export default function LoginPage() {
         <div className="text-8xl mb-3 drop-shadow-lg">🙏</div>
         <h1 className="text-3xl font-bold text-ganesh-deep leading-tight"
             style={{ fontFamily: "'Tiro Devanagari Hindi', serif" }}>
-          गणेशोत्सव 2026
+          BGMM गणेशोत्सव 2026
         </h1>
-        <p className="text-ganesh-orange font-semibold text-lg mt-1">Donation Collection App</p>
-        <p className="text-gray-500 text-sm mt-1">Shri Ganesh Utsav Mandal</p>
+        <p className="text-ganesh-orange font-semibold text-lg mt-1">BGMM Ganeshotsav 2026</p>
+        <p className="text-gray-500 text-sm mt-1">बाल गोपाळ मित्र मंडळ</p>
       </div>
 
       {/* Tab switcher */}
@@ -175,7 +175,7 @@ export default function LoginPage() {
       </div>
 
       <p className="text-xs text-gray-400 mt-6 text-center">
-        Ganeshotsav 2026 · Digital Receipt System
+        BGMM Ganeshotsav 2026 · Digital Receipt System
       </p>
     </div>
   )
