@@ -546,3 +546,36 @@ export async function getVolunteerBalances() {
 
   return { data: result, error: null }
 }
+
+// ─── PIN & Password Change ────────────────────────────────────────────────────
+export async function changeVolunteerPin(volunteerId, oldPin, newPin) {
+  if (useMock) {
+    const { MOCK_VOLUNTEERS } = await import('./mockData')
+    const v = MOCK_VOLUNTEERS?.find(x => x.id === volunteerId)
+    if (!v) return { error: 'Volunteer not found' }
+    if (v.pin !== oldPin) return { error: 'Incorrect current PIN' }
+    v.pin = newPin
+    return { error: null }
+  }
+  // Verify old PIN first
+  const { data: v, error: fetchErr } = await supabase
+    .from('volunteers').select('pin').eq('id', volunteerId).single()
+  if (fetchErr || !v) return { error: 'Could not verify PIN' }
+  if (v.pin !== oldPin) return { error: 'Incorrect current PIN' }
+  const { error } = await supabase
+    .from('volunteers').update({ pin: newPin }).eq('id', volunteerId)
+  return { error: error?.message || null }
+}
+
+export async function changeAdminPassword(currentPassword, newPassword) {
+  if (useMock) {
+    return { error: null } // mock always succeeds
+  }
+  const { data, error: fetchErr } = await supabase
+    .from('admin_config').select('password').eq('id', 1).single()
+  if (fetchErr || !data) return { error: 'Could not verify password' }
+  if (data.password !== currentPassword) return { error: 'Incorrect current password' }
+  const { error } = await supabase
+    .from('admin_config').update({ password: newPassword }).eq('id', 1)
+  return { error: error?.message || null }
+}

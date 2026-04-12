@@ -4,19 +4,33 @@ import { IndianRupee, Smartphone, User, Hash, CreditCard, Ban, StickyNote, Chevr
 import Header from '../components/Header'
 import Spinner from '../components/Spinner'
 import UpiQR from '../components/UpiQR'
-import { getFlatById, submitDonation, refuseFlat, updateFlatNote } from '../api'
+import { getFlatById, submitDonation, refuseFlat, updateFlatNote, getDonationByFlatId } from '../api'
 import { useCollector } from '../context/CollectorContext'
 
 const PRESET_AMOUNTS   = [101, 201, 501, 1001, 2001, 5001]
 const QUICK_NOTES      = ['Not Home', 'Call First', 'Visit Again Tomorrow', 'Empty / Vacant', 'Already Donated Elsewhere']
+
+function DRow({ label, value, bold, large, mono }) {
+  return (
+    <div className="flex justify-between items-start gap-2">
+      <p className="text-gray-500 text-sm flex-shrink-0">{label}</p>
+      <p className={`text-right break-all
+        ${bold  ? 'font-bold text-gray-800'  : 'text-gray-700'}
+        ${large ? 'text-lg text-green-700'   : 'text-sm'}
+        ${mono  ? 'font-mono text-xs'        : ''}
+      `}>{value}</p>
+    </div>
+  )
+}
 
 export default function DonationForm() {
   const { flatId } = useParams()
   const navigate   = useNavigate()
   const { collectorName } = useCollector()
 
-  const [flat, setFlat]             = useState(null)
-  const [loading, setLoading]       = useState(true)
+  const [flat, setFlat]               = useState(null)
+  const [existingDonation, setExistingDonation] = useState(null)
+  const [loading, setLoading]         = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [refusing, setRefusing]     = useState(false)
   const [error, setError]           = useState('')
@@ -30,10 +44,14 @@ export default function DonationForm() {
   })
 
   useEffect(() => {
-    getFlatById(flatId).then(({ data }) => {
-      setFlat(data)
-      setNote(data?.notes || '')
-      if (data?.notes) setShowNotes(true)
+    Promise.all([
+      getFlatById(flatId),
+      getDonationByFlatId(flatId),
+    ]).then(([{ data: flatData }, { data: donData }]) => {
+      setFlat(flatData)
+      setNote(flatData?.notes || '')
+      if (flatData?.notes) setShowNotes(true)
+      if (donData) setExistingDonation(donData)
       setLoading(false)
     })
   }, [flatId])
@@ -105,7 +123,7 @@ export default function DonationForm() {
           </div>
         )}
 
-        {!alreadyPaid && !alreadyRefused && (
+        {!alreadyPaid && !alreadyRefused && !existingDonation && (
           <>
             {/* ── Notes section ── */}
             <div className="bg-amber-50 border border-amber-200 rounded-2xl overflow-hidden">
