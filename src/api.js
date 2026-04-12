@@ -1,5 +1,5 @@
 import supabase from './supabase'
-import { BUILDINGS, WINGS, FLATS, DONATIONS, nextReceiptNo } from './mockData'
+import { BUILDINGS, WINGS, FLATS, DONATIONS, nextReceiptNo, SPECIAL_ENTRIES } from './mockData'
 
 const useMock = !import.meta.env.VITE_SUPABASE_URL
 
@@ -313,7 +313,6 @@ export async function getReportData() {
 }
 
 // ─── Special Entries ──────────────────────────────────────────────────────────
-import { SPECIAL_ENTRIES } from './mockData'
 
 export async function getSpecialEntries() {
   if (useMock) return { data: SPECIAL_ENTRIES, error: null }
