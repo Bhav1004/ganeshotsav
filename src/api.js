@@ -467,3 +467,82 @@ export async function confirmHandover(id) {
     .update({ status: 'confirmed', confirmed_at: new Date().toISOString() })
     .eq('id', id)
 }
+
+// ─── Volunteer Balances (for admin Collection tab) ────────────────────────────
+export async function getVolunteerBalances() {
+  if (useMock) {
+    // Build from mock donations + handovers
+    const volunteers = [
+      { name: 'Rahul Sharma',   logged_in: false },
+      { name: 'Priya Patil',    logged_in: false },
+      { name: 'Amit Desai',     logged_in: false },
+    ]
+    return {
+      data: volunteers.map(v => {
+        const myDon     = DONATIONS.filter(d => d.collected_by === v.name)
+        const cashColl  = myDon.filter(d => d.payment_mode === 'Cash').reduce((s,d) => s + Number(d.amount), 0)
+        const upiColl   = myDon.filter(d => d.payment_mode === 'UPI').reduce((s,d) => s + Number(d.amount), 0)
+        const myHand    = HANDOVERS.filter(h => h.volunteer_name === v.name)
+        const confHand  = myHand.filter(h => h.status === 'confirmed')
+        const cashSub   = confHand.reduce((s,h) => s + Number(h.cash_amount), 0)
+        const upiSub    = confHand.reduce((s,h) => s + Number(h.upi_amount),  0)
+        return {
+          name:          v.name,
+          logged_in:     v.logged_in,
+          cashCollected: cashColl,
+          upiCollected:  upiColl,
+          totalCollected:cashColl + upiColl,
+          cashSubmitted: cashSub,
+          upiSubmitted:  upiSub,
+          totalSubmitted:cashSub + upiSub,
+          cashPending:   cashColl - cashSub,
+          upiPending:    upiColl  - upiSub,
+          totalPending:  (cashColl - cashSub) + (upiColl - upiSub),
+          handovers:     myHand,
+          donationCount: myDon.length,
+        }
+      }),
+      error: null,
+    }
+  }
+
+  // Fetch donations + handovers + volunteers in parallel
+  const [donRes, handRes, volRes] = await Promise.all([
+    supabase.from('donations').select('amount, payment_mode, collected_by'),
+    supabase.from('handovers').select('*').order('created_at', { ascending: false }),
+    supabase.from('volunteers').select('name, logged_in').eq('is_active', true).order('name'),
+  ])
+
+  const donations  = donRes.data  || []
+  const handovers  = handRes.data || []
+  const volunteers = volRes.data  || []
+
+  const result = volunteers.map(v => {
+    const myDon    = donations.filter(d => d.collected_by === v.name)
+    const cashColl = myDon.filter(d => d.payment_mode === 'Cash').reduce((s,d) => s + Number(d.amount), 0)
+    const upiColl  = myDon.filter(d => d.payment_mode === 'UPI').reduce((s,d) => s + Number(d.amount), 0)
+
+    const myHand   = handovers.filter(h => h.volunteer_name === v.name)
+    const confHand = myHand.filter(h => h.status === 'confirmed')
+    const cashSub  = confHand.reduce((s,h) => s + Number(h.cash_amount), 0)
+    const upiSub   = confHand.reduce((s,h) => s + Number(h.upi_amount),  0)
+
+    return {
+      name:           v.name,
+      logged_in:      v.logged_in,
+      cashCollected:  cashColl,
+      upiCollected:   upiColl,
+      totalCollected: cashColl + upiColl,
+      cashSubmitted:  cashSub,
+      upiSubmitted:   upiSub,
+      totalSubmitted: cashSub + upiSub,
+      cashPending:    cashColl - cashSub,
+      upiPending:     upiColl  - upiSub,
+      totalPending:   (cashColl - cashSub) + (upiColl - upiSub),
+      handovers:      myHand,
+      donationCount:  myDon.length,
+    }
+  })
+
+  return { data: result, error: null }
+}

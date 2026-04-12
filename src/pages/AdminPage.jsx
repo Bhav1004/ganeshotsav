@@ -12,7 +12,7 @@ import {
   updateVolunteerAssignment, addVolunteer,
   deleteDonationAndUnlockFlat, updateDonation, getEODReport, getSpecialEntries,
   deleteSpecialDonationAndReset, editSpecialEntry, deleteSpecialEntry,
-  getHandovers, confirmHandover,
+  getHandovers, confirmHandover, getVolunteerBalances,
 } from '../api'
 import supabase from '../supabase'
 import { BUILDINGS, WINGS, FLATS, DONATIONS } from '../mockData'
@@ -220,6 +220,27 @@ function AssignModal({ volunteer, buildings, onClose, onSave }) {
 }
 
 
+
+function SummaryRow({ label, cash, upi, highlight }) {
+  const fmt = n => Number(n||0).toLocaleString('en-IN')
+  return (
+    <div className={`flex justify-between items-center py-1.5 ${highlight ? 'font-bold' : ''}`}>
+      <p className={`text-sm ${highlight ? 'text-red-600' : 'text-gray-600'}`}>{label}</p>
+      <div className="flex gap-3">
+        <p className={`text-sm w-16 text-right ${highlight ? 'text-red-600' : 'text-green-700'}`}>
+          {cash > 0 ? `₹${fmt(cash)}` : '—'}
+        </p>
+        <p className={`text-sm w-16 text-right ${highlight ? 'text-red-600' : 'text-blue-700'}`}>
+          {upi > 0 ? `₹${fmt(upi)}` : '—'}
+        </p>
+        <p className={`text-sm w-16 text-right font-semibold ${highlight ? 'text-red-600' : 'text-gray-700'}`}>
+          ₹{fmt(cash + upi)}
+        </p>
+      </div>
+    </div>
+  )
+}
+
 // ── Edit Special Entry Modal ──────────────────────────────────────────────────
 function EditSpecialModal({ entry, onClose, onSave }) {
   const [form, setForm] = useState({
@@ -288,25 +309,29 @@ export default function AdminPage() {
   const [actionLoading, setActionLoading] = useState(false)
   const [liveUpdates, setLiveUpdates]     = useState(0)
   const [specials, setSpecials]           = useState([])
-  const [handovers, setHandovers]         = useState([])
+  const [handovers, setHandovers]           = useState([])
+  const [volunteerBalances, setVolunteerBalances] = useState([])
+  const [expandedVol, setExpandedVol]     = useState(null)
   const [editSpecial, setEditSpecial]     = useState(null)
   const [deleteSpecial, setDeleteSpecial] = useState(null)
   const reloadTimer = useRef(null)
 
   const load = useCallback(async (quiet=false) => {
     if (!quiet) setLoading(true); else setRefreshing(true)
-    const [report, vols, blds, spl, hvrs] = await Promise.all([
+    const [report, vols, blds, spl, hvrs, balances] = await Promise.all([
       fetchAdminData(),
       getVolunteers(),
       getBuildings(),
       getSpecialEntries(),
       getHandovers(),
+      getVolunteerBalances(),
     ])
     setData(report)
     setVolunteers(vols.data||[])
     setBuildings(blds.data||[])
     setSpecials(spl.data||[])
     setHandovers(hvrs.data||[])
+    setVolunteerBalances(balances.data||[])
     setLoading(false); setRefreshing(false)
   }, [])
 
@@ -433,12 +458,13 @@ export default function AdminPage() {
   const handleLogout = () => { logout(); navigate('/login',{replace:true}) }
 
   const TABS = [
-    { id:'buildings',  label:'🏢 Buildings' },
-    { id:'special',    label:'🏪 Special' },
-    { id:'handovers',  label:'💰 Handovers' },
-    { id:'collectors', label:'🏆 Collectors' },
-    { id:'volunteers', label:'👥 Volunteers' },
-    { id:'donations',  label:'📋 Donations' },
+    { id:'buildings',   label:'🏢 Buildings' },
+    { id:'special',     label:'🏪 Special' },
+    { id:'collection',  label:'📊 Collection' },
+    { id:'handovers',   label:'✅ Approvals' },
+    { id:'collectors',  label:'🏆 Collectors' },
+    { id:'volunteers',  label:'👥 Volunteers' },
+    { id:'donations',   label:'📋 Donations' },
   ]
 
   return (
@@ -685,67 +711,196 @@ export default function AdminPage() {
           )}
 
 
-          {/* ── Handovers Tab ── */}
-          {activeTab==='handovers' && (
+
+          {/* ── Collection Tab ── */}
+          {activeTab==='collection' && (
             <section className="space-y-4">
-              {/* Running balance */}
+              {/* Overall banner */}
               {(() => {
-                const confirmed = handovers.filter(h=>h.status==='confirmed')
-                const pending   = handovers.filter(h=>h.status==='pending')
-                const confCash  = confirmed.reduce((s,h)=>s+Number(h.cash_amount),0)
-                const confUPI   = confirmed.reduce((s,h)=>s+Number(h.upi_amount),0)
-                const pendTotal = pending.reduce((s,h)=>s+Number(h.cash_amount)+Number(h.upi_amount),0)
+                const totalColl = volunteerBalances.reduce((s,v)=>s+v.totalCollected,0)
+                const totalSub  = volunteerBalances.reduce((s,v)=>s+v.totalSubmitted,0)
+                const totalPend = volunteerBalances.reduce((s,v)=>s+v.totalPending,0)
+                const cashColl  = volunteerBalances.reduce((s,v)=>s+v.cashCollected,0)
+                const upiColl   = volunteerBalances.reduce((s,v)=>s+v.upiCollected,0)
+                const cashSub   = volunteerBalances.reduce((s,v)=>s+v.cashSubmitted,0)
+                const upiSub    = volunteerBalances.reduce((s,v)=>s+v.upiSubmitted,0)
+                const cashPend  = volunteerBalances.reduce((s,v)=>s+v.cashPending,0)
+                const upiPend   = volunteerBalances.reduce((s,v)=>s+v.upiPending,0)
                 return (
-                  <div className="grid grid-cols-3 gap-2">
-                    <div className="bg-green-50 border border-green-200 rounded-xl p-3 text-center">
-                      <p className="text-xs text-gray-500 mb-1">✅ Confirmed</p>
-                      <p className="font-bold text-green-700">₹{fmt(confCash+confUPI)}</p>
+                  <div className="bg-white rounded-2xl border border-orange-100 overflow-hidden shadow-sm">
+                    {/* Column headers */}
+                    <div className="bg-orange-50 border-b border-orange-100 px-4 py-2 flex justify-between">
+                      <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">All Volunteers</p>
+                      <div className="flex gap-3">
+                        <p className="text-xs font-bold text-green-700 w-16 text-right">💵 Cash</p>
+                        <p className="text-xs font-bold text-blue-700  w-16 text-right">📲 UPI</p>
+                        <p className="text-xs font-bold text-gray-700  w-16 text-right">Total</p>
+                      </div>
                     </div>
-                    <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-center">
-                      <p className="text-xs text-gray-500 mb-1">⏳ Pending</p>
-                      <p className="font-bold text-amber-700">₹{fmt(pendTotal)}</p>
-                    </div>
-                    <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-center">
-                      <p className="text-xs text-gray-500 mb-1">📋 Total</p>
-                      <p className="font-bold text-blue-700">₹{fmt(confCash+confUPI+pendTotal)}</p>
+                    <div className="px-4 py-3 space-y-2">
+                      <SummaryRow label="Collected" cash={cashColl} upi={upiColl}/>
+                      <SummaryRow label="Submitted" cash={cashSub}  upi={upiSub}/>
+                      <SummaryRow label="⚠️ Pending" cash={cashPend} upi={upiPend} highlight/>
                     </div>
                   </div>
                 )
               })()}
 
-              {handovers.length===0 && (
-                <p className="text-center text-gray-400 py-10">No submissions yet</p>
-              )}
-              {handovers.map(h=>(
-                <div key={h.id} className="bg-white rounded-xl border border-orange-100 p-4">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <p className="font-bold text-gray-800">{h.volunteer_name}</p>
-                      <div className="flex gap-3 mt-1">
-                        {Number(h.cash_amount)>0 && <span className="text-sm text-gray-600">💵 ₹{fmt(h.cash_amount)}</span>}
-                        {Number(h.upi_amount)>0  && <span className="text-sm text-gray-600">📲 ₹{fmt(h.upi_amount)}</span>}
+              {/* Per volunteer cards */}
+              <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Per Volunteer</p>
+              {volunteerBalances.filter(v=>v.totalCollected>0||v.handovers.length>0).map(v => (
+                <div key={v.name} className="bg-white rounded-2xl border border-orange-100 overflow-hidden">
+                  {/* Volunteer header */}
+                  <button
+                    className="w-full px-4 py-3 flex items-start justify-between touch-manipulation active:bg-orange-50"
+                    onClick={()=>setExpandedVol(expandedVol===v.name?null:v.name)}
+                  >
+                    <div className="text-left flex-1">
+                      <div className="flex items-center gap-2">
+                        <div className={`w-2 h-2 rounded-full flex-shrink-0 ${v.logged_in?'bg-green-500':'bg-gray-300'}`}/>
+                        <p className="font-bold text-gray-800">{v.name}</p>
+                        <span className="text-xs text-gray-400">{v.donationCount} donations</span>
                       </div>
-                      {h.note && <p className="text-xs text-gray-400 mt-0.5">{h.note}</p>}
-                      <p className="text-xs text-gray-400 mt-0.5">
-                        {new Date(h.created_at).toLocaleDateString('en-IN',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})}
-                      </p>
+                      {/* Mini balance row */}
+                      <div className="flex gap-3 mt-1.5 flex-wrap">
+                        <span className="text-xs bg-orange-50 text-ganesh-deep px-2 py-0.5 rounded-md font-semibold">
+                          Collected ₹{fmt(v.totalCollected)}
+                        </span>
+                        <span className="text-xs bg-green-50 text-green-700 px-2 py-0.5 rounded-md font-semibold">
+                          Submitted ₹{fmt(v.totalSubmitted)}
+                        </span>
+                        {v.totalPending > 0 && (
+                          <span className="text-xs bg-red-50 text-red-600 px-2 py-0.5 rounded-md font-semibold">
+                            ⚠️ Pending ₹{fmt(v.totalPending)}
+                          </span>
+                        )}
+                        {v.totalPending <= 0 && v.totalCollected > 0 && (
+                          <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-md font-semibold">
+                            ✅ All Clear
+                          </span>
+                        )}
+                      </div>
                     </div>
-                    <div className="flex flex-col items-end gap-2">
-                      <span className={`text-xs px-2 py-1 rounded-full font-semibold ${
-                        h.status==='confirmed'?'bg-green-100 text-green-700':'bg-amber-100 text-amber-700'
-                      }`}>
-                        {h.status==='confirmed'?'✅ Confirmed':'⏳ Pending'}
-                      </span>
-                      {h.status==='pending' && (
-                        <button onClick={()=>handleConfirmHandover(h.id)} disabled={actionLoading}
-                          className="text-xs bg-green-500 text-white px-3 py-1.5 rounded-lg font-semibold touch-manipulation">
-                          ✅ Confirm Received
-                        </button>
+                    {expandedVol===v.name
+                      ? <ChevronUp size={16} className="text-gray-400 flex-shrink-0 mt-1"/>
+                      : <ChevronDown size={16} className="text-gray-400 flex-shrink-0 mt-1"/>}
+                  </button>
+
+                  {/* Expanded detail */}
+                  {expandedVol===v.name && (
+                    <div className="border-t border-orange-100">
+                      {/* Detailed balance table */}
+                      <div className="px-4 py-3 bg-orange-50/50">
+                        <div className="flex justify-between text-xs font-semibold text-gray-500 mb-2">
+                          <span></span>
+                          <div className="flex gap-3">
+                            <span className="w-16 text-right text-green-700">💵 Cash</span>
+                            <span className="w-16 text-right text-blue-700">📲 UPI</span>
+                            <span className="w-16 text-right text-gray-700">Total</span>
+                          </div>
+                        </div>
+                        {[
+                          { label:'Collected', cash:v.cashCollected, upi:v.upiCollected },
+                          { label:'Submitted', cash:v.cashSubmitted, upi:v.upiSubmitted },
+                          { label:'Pending',   cash:v.cashPending,   upi:v.upiPending, warn:true },
+                        ].map(row=>(
+                          <div key={row.label} className={`flex justify-between text-sm py-1 ${row.warn&&(row.cash>0||row.upi>0)?'font-bold text-red-600':''}`}>
+                            <span className="text-gray-600">{row.warn&&(row.cash>0||row.upi>0)?'⚠️ ':''}{row.label}</span>
+                            <div className="flex gap-3">
+                              <span className="w-16 text-right">{row.cash>0?`₹${fmt(row.cash)}`:'—'}</span>
+                              <span className="w-16 text-right">{row.upi>0?`₹${fmt(row.upi)}`:'—'}</span>
+                              <span className="w-16 text-right font-semibold">₹{fmt(row.cash+row.upi)}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Handover history for this volunteer */}
+                      {v.handovers.length > 0 && (
+                        <div className="divide-y divide-gray-50">
+                          <p className="px-4 py-2 text-xs font-bold text-gray-400 uppercase tracking-wide">Handover History</p>
+                          {v.handovers.map(h=>(
+                            <div key={h.id} className="px-4 py-2.5 flex justify-between items-center">
+                              <div>
+                                <div className="flex gap-2 text-sm">
+                                  {Number(h.cash_amount)>0&&<span className="text-green-700">💵 ₹{fmt(h.cash_amount)}</span>}
+                                  {Number(h.upi_amount)>0 &&<span className="text-blue-700">📲 ₹{fmt(h.upi_amount)}</span>}
+                                </div>
+                                <p className="text-xs text-gray-400 mt-0.5">
+                                  {new Date(h.created_at).toLocaleDateString('en-IN',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})}
+                                </p>
+                                {h.note&&<p className="text-xs text-gray-400">{h.note}</p>}
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className={`text-xs px-2 py-1 rounded-full font-semibold ${
+                                  h.status==='confirmed'?'bg-green-100 text-green-700':'bg-amber-100 text-amber-700'
+                                }`}>
+                                  {h.status==='confirmed'?'✅':'⏳'}
+                                </span>
+                                {h.status==='pending'&&(
+                                  <button onClick={()=>handleConfirmHandover(h.id)} disabled={actionLoading}
+                                    className="text-xs bg-green-500 text-white px-2 py-1 rounded-lg font-semibold touch-manipulation">
+                                    Confirm
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
                       )}
                     </div>
-                  </div>
+                  )}
                 </div>
               ))}
+
+              {volunteerBalances.filter(v=>v.totalCollected>0).length===0 && (
+                <p className="text-center text-gray-400 py-10">No collections yet</p>
+              )}
+            </section>
+          )}
+
+          {/* ── Approvals Tab (pending handovers only) ── */}
+          {activeTab==='handovers' && (
+            <section className="space-y-3">
+              {(() => {
+                const pending = handovers.filter(h=>h.status==='pending')
+                if (pending.length===0) return (
+                  <div className="text-center py-12">
+                    <p className="text-4xl mb-3">✅</p>
+                    <p className="font-bold text-green-700">All Clear!</p>
+                    <p className="text-gray-400 text-sm mt-1">No pending submissions to approve.</p>
+                  </div>
+                )
+                return (
+                  <>
+                    <div className="bg-amber-50 border-2 border-amber-200 rounded-xl px-4 py-3 flex justify-between items-center">
+                      <p className="font-semibold text-amber-700 text-sm">⏳ {pending.length} pending approval{pending.length>1?'s':''}</p>
+                      <p className="font-bold text-amber-800">₹{fmt(pending.reduce((s,h)=>s+Number(h.cash_amount)+Number(h.upi_amount),0))}</p>
+                    </div>
+                    {pending.map(h=>(
+                      <div key={h.id} className="bg-white rounded-xl border-2 border-amber-200 p-4">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <p className="font-bold text-gray-800">{h.volunteer_name}</p>
+                            <div className="flex gap-3 mt-1">
+                              {Number(h.cash_amount)>0&&<span className="text-sm font-semibold text-green-700">💵 ₹{fmt(h.cash_amount)}</span>}
+                              {Number(h.upi_amount)>0 &&<span className="text-sm font-semibold text-blue-700">📲 ₹{fmt(h.upi_amount)}</span>}
+                            </div>
+                            {h.note&&<p className="text-xs text-gray-400 mt-0.5 italic">"{h.note}"</p>}
+                            <p className="text-xs text-gray-400 mt-0.5">
+                              {new Date(h.created_at).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})}
+                            </p>
+                          </div>
+                          <button onClick={()=>handleConfirmHandover(h.id)} disabled={actionLoading}
+                            className="bg-green-500 text-white px-4 py-2 rounded-xl font-bold text-sm touch-manipulation flex-shrink-0 ml-3 active:scale-95 transition-transform">
+                            ✅ Confirm
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </>
+                )
+              })()}
             </section>
           )}
 
