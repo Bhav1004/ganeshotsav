@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams, useLocation } from 'react-router-dom'
-import { Store, User, Tag, MapPin, IndianRupee, CreditCard, Hash, Ban } from 'lucide-react'
+import { Store, User, Tag, MapPin, IndianRupee, CreditCard, Hash, Ban, Phone } from 'lucide-react'
 import Header from '../components/Header'
 import Spinner from '../components/Spinner'
 import UpiQR from '../components/UpiQR'
@@ -47,7 +47,7 @@ export default function SpecialFormPage() {
   const [refuseNote, setRefuseNote] = useState('')
 
   const [entryForm, setEntryForm] = useState({
-    name: '', owner_name: '', category: 'Shop', area: '',
+    name: '', owner_name: '', category: 'Shop', area: '', mobile: '',
   })
   const [form, setForm] = useState({
     amount: '', payment_mode: 'Cash', transaction_id: '',
@@ -79,6 +79,7 @@ export default function SpecialFormPage() {
       owner_name: entryForm.owner_name.trim(),
       category:   entryForm.category,
       area:       entryForm.area.trim(),
+      mobile:     entryForm.mobile.trim(),
       created_by: collectorName,
     })
     setSubmitting(false)
@@ -95,7 +96,7 @@ export default function SpecialFormPage() {
       special_entry_id: entry.id,
       flat_id:          null,
       donor_name:       entry.owner_name || entry.name,
-      mobile:           '',
+      mobile:           entry.mobile || '',
       amount:           Number(form.amount),
       payment_mode:     form.payment_mode,
       transaction_id:   form.transaction_id.trim(),
@@ -299,6 +300,23 @@ export default function SpecialFormPage() {
                 value={entryForm.area}
                 onChange={e => setE('area', e.target.value)}
                 autoCapitalize="words"
+              />
+            </div>
+
+            {/* Mobile */}
+            <div>
+              <label className="text-sm font-semibold text-gray-700 mb-1.5 flex items-center gap-1.5">
+                <Phone size={15} /> Mobile Number
+                <span className="text-gray-400 font-normal">(optional — for WhatsApp)</span>
+              </label>
+              <input
+                className="input-field"
+                placeholder="10-digit mobile number"
+                type="tel"
+                inputMode="numeric"
+                maxLength={10}
+                value={entryForm.mobile}
+                onChange={e => setE('mobile', e.target.value.replace(/\D/g, ''))}
               />
             </div>
 

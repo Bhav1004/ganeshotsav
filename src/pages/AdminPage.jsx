@@ -11,7 +11,8 @@ import {
   getBuildings, getVolunteers, forceLogoutVolunteer,
   updateVolunteerAssignment, addVolunteer,
   deleteDonationAndUnlockFlat, updateDonation, getEODReport, getSpecialEntries,
-  deleteSpecialDonationAndReset,
+  deleteSpecialDonationAndReset, editSpecialEntry, deleteSpecialEntry,
+  getHandovers, confirmHandover,
 } from '../api'
 import supabase from '../supabase'
 import { BUILDINGS, WINGS, FLATS, DONATIONS } from '../mockData'
@@ -218,6 +219,56 @@ function AssignModal({ volunteer, buildings, onClose, onSave }) {
   )
 }
 
+
+// ── Edit Special Entry Modal ──────────────────────────────────────────────────
+function EditSpecialModal({ entry, onClose, onSave }) {
+  const [form, setForm] = useState({
+    name:       entry.name       || '',
+    owner_name: entry.owner_name || '',
+    category:   entry.category   || 'Shop',
+    area:       entry.area       || '',
+    mobile:     entry.mobile     || '',
+  })
+  const [saving, setSaving] = useState(false)
+  const set = (k,v) => setForm(f=>({...f,[k]:v}))
+  const CAT_ICON = { Shop:'🏪', VIP:'⭐', Bungalow:'🏠' }
+
+  const save = async () => {
+    setSaving(true)
+    await onSave(entry.id, form)
+    setSaving(false)
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-end justify-center p-4">
+      <div className="bg-white rounded-3xl w-full max-w-sm p-5 space-y-3 max-h-[90vh] overflow-y-auto">
+        <div className="flex justify-between items-center">
+          <h3 className="font-bold text-gray-800">✏️ Edit Entry</h3>
+          <button onClick={onClose} className="p-1.5 rounded-lg bg-gray-100 touch-manipulation"><X size={18}/></button>
+        </div>
+        <div className="grid grid-cols-3 gap-2">
+          {['Shop','VIP','Bungalow'].map(cat=>(
+            <button key={cat} onClick={()=>set('category',cat)}
+              className={`py-2 rounded-xl text-sm font-bold border-2 transition-all touch-manipulation ${
+                form.category===cat?'bg-ganesh-orange text-white border-ganesh-orange':'bg-white text-gray-600 border-gray-200'
+              }`}>
+              {CAT_ICON[cat]} {cat}
+            </button>
+          ))}
+        </div>
+        <input className="input-field" placeholder="Name *" value={form.name} onChange={e=>set('name',e.target.value)}/>
+        <input className="input-field" placeholder="Owner name" value={form.owner_name} onChange={e=>set('owner_name',e.target.value)}/>
+        <input className="input-field" placeholder="Area / Street" value={form.area} onChange={e=>set('area',e.target.value)}/>
+        <input className="input-field" placeholder="Mobile number" type="tel" inputMode="numeric" maxLength={10}
+          value={form.mobile} onChange={e=>set('mobile',e.target.value.replace(/\D/g,''))}/>
+        <button onClick={save} disabled={saving} className="btn-primary">
+          <span className="flex items-center justify-center gap-2"><Save size={16}/>{saving?'Saving…':'Save Changes'}</span>
+        </button>
+      </div>
+    </div>
+  )
+}
+
 // ── Main Admin Page ───────────────────────────────────────────────────────────
 export default function AdminPage() {
   const { logout } = useCollector()
@@ -237,20 +288,25 @@ export default function AdminPage() {
   const [actionLoading, setActionLoading] = useState(false)
   const [liveUpdates, setLiveUpdates]     = useState(0)
   const [specials, setSpecials]           = useState([])
+  const [handovers, setHandovers]         = useState([])
+  const [editSpecial, setEditSpecial]     = useState(null)
+  const [deleteSpecial, setDeleteSpecial] = useState(null)
   const reloadTimer = useRef(null)
 
   const load = useCallback(async (quiet=false) => {
     if (!quiet) setLoading(true); else setRefreshing(true)
-    const [report, vols, blds, spl] = await Promise.all([
+    const [report, vols, blds, spl, hvrs] = await Promise.all([
       fetchAdminData(),
       getVolunteers(),
       getBuildings(),
       getSpecialEntries(),
+      getHandovers(),
     ])
     setData(report)
     setVolunteers(vols.data||[])
     setBuildings(blds.data||[])
     setSpecials(spl.data||[])
+    setHandovers(hvrs.data||[])
     setLoading(false); setRefreshing(false)
   }, [])
 
@@ -331,6 +387,26 @@ export default function AdminPage() {
     a.href = URL.createObjectURL(blob); a.download='ganeshotsav2026.csv'; a.click()
   }
 
+  const handleConfirmHandover = async (id) => {
+    setActionLoading(true)
+    await confirmHandover(id)
+    setActionLoading(false)
+    load(true)
+  }
+
+  const handleEditSpecial = async (id, updates) => {
+    await editSpecialEntry(id, updates)
+    load(true)
+  }
+
+  const handleDeleteSpecial = async (id, deleteDon) => {
+    setActionLoading(true)
+    await deleteSpecialEntry(id, deleteDon)
+    setActionLoading(false)
+    setDeleteSpecial(null)
+    load(true)
+  }
+
   const handleEODReport = async () => {
     const report = await getEODReport()
     const top    = report.collectors[0]
@@ -359,6 +435,7 @@ export default function AdminPage() {
   const TABS = [
     { id:'buildings',  label:'🏢 Buildings' },
     { id:'special',    label:'🏪 Special' },
+    { id:'handovers',  label:'💰 Handovers' },
     { id:'collectors', label:'🏆 Collectors' },
     { id:'volunteers', label:'👥 Volunteers' },
     { id:'donations',  label:'📋 Donations' },
@@ -420,7 +497,7 @@ export default function AdminPage() {
           </section>
 
           {/* Tabs */}
-          <div className="bg-white rounded-2xl border border-orange-100 p-1 grid grid-cols-5 gap-1">
+          <div className="bg-white rounded-2xl border border-orange-100 p-1 flex flex-wrap gap-1">
             {TABS.map(t=>(
               <button key={t.id} onClick={()=>setActiveTab(t.id)}
                 className={`py-2 rounded-xl text-xs font-semibold transition-all touch-manipulation ${
@@ -607,6 +684,71 @@ export default function AdminPage() {
             </section>
           )}
 
+
+          {/* ── Handovers Tab ── */}
+          {activeTab==='handovers' && (
+            <section className="space-y-4">
+              {/* Running balance */}
+              {(() => {
+                const confirmed = handovers.filter(h=>h.status==='confirmed')
+                const pending   = handovers.filter(h=>h.status==='pending')
+                const confCash  = confirmed.reduce((s,h)=>s+Number(h.cash_amount),0)
+                const confUPI   = confirmed.reduce((s,h)=>s+Number(h.upi_amount),0)
+                const pendTotal = pending.reduce((s,h)=>s+Number(h.cash_amount)+Number(h.upi_amount),0)
+                return (
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="bg-green-50 border border-green-200 rounded-xl p-3 text-center">
+                      <p className="text-xs text-gray-500 mb-1">✅ Confirmed</p>
+                      <p className="font-bold text-green-700">₹{fmt(confCash+confUPI)}</p>
+                    </div>
+                    <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-center">
+                      <p className="text-xs text-gray-500 mb-1">⏳ Pending</p>
+                      <p className="font-bold text-amber-700">₹{fmt(pendTotal)}</p>
+                    </div>
+                    <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-center">
+                      <p className="text-xs text-gray-500 mb-1">📋 Total</p>
+                      <p className="font-bold text-blue-700">₹{fmt(confCash+confUPI+pendTotal)}</p>
+                    </div>
+                  </div>
+                )
+              })()}
+
+              {handovers.length===0 && (
+                <p className="text-center text-gray-400 py-10">No submissions yet</p>
+              )}
+              {handovers.map(h=>(
+                <div key={h.id} className="bg-white rounded-xl border border-orange-100 p-4">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <p className="font-bold text-gray-800">{h.volunteer_name}</p>
+                      <div className="flex gap-3 mt-1">
+                        {Number(h.cash_amount)>0 && <span className="text-sm text-gray-600">💵 ₹{fmt(h.cash_amount)}</span>}
+                        {Number(h.upi_amount)>0  && <span className="text-sm text-gray-600">📲 ₹{fmt(h.upi_amount)}</span>}
+                      </div>
+                      {h.note && <p className="text-xs text-gray-400 mt-0.5">{h.note}</p>}
+                      <p className="text-xs text-gray-400 mt-0.5">
+                        {new Date(h.created_at).toLocaleDateString('en-IN',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'})}
+                      </p>
+                    </div>
+                    <div className="flex flex-col items-end gap-2">
+                      <span className={`text-xs px-2 py-1 rounded-full font-semibold ${
+                        h.status==='confirmed'?'bg-green-100 text-green-700':'bg-amber-100 text-amber-700'
+                      }`}>
+                        {h.status==='confirmed'?'✅ Confirmed':'⏳ Pending'}
+                      </span>
+                      {h.status==='pending' && (
+                        <button onClick={()=>handleConfirmHandover(h.id)} disabled={actionLoading}
+                          className="text-xs bg-green-500 text-white px-3 py-1.5 rounded-lg font-semibold touch-manipulation">
+                          ✅ Confirm Received
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </section>
+          )}
+
           {/* ── Collectors Tab ── */}
           {activeTab==='collectors' && (
             <section className="space-y-2">
@@ -774,6 +916,43 @@ export default function AdminPage() {
                 disabled={actionLoading}
                 className="py-3 rounded-xl bg-red-500 text-white font-semibold touch-manipulation">
                 {actionLoading?'Unlocking…':'Yes, Unlock'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+
+      {/* ── Edit Special Entry Modal ── */}
+      {editSpecial && (
+        <EditSpecialModal
+          entry={editSpecial}
+          onClose={()=>setEditSpecial(null)}
+          onSave={(id,updates)=>{ handleEditSpecial(id,updates); setEditSpecial(null) }}
+        />
+      )}
+
+      {/* ── Delete Special Entry Dialog ── */}
+      {deleteSpecial && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl w-full max-w-sm p-6 text-center">
+            <p className="text-3xl mb-3">🗑️</p>
+            <h3 className="font-bold text-gray-800 text-lg mb-1">Delete Entry?</h3>
+            <p className="text-gray-500 text-sm mb-4">{deleteSpecial.name}</p>
+            <div className="space-y-2">
+              <button onClick={()=>handleDeleteSpecial(deleteSpecial.id, true)}
+                disabled={actionLoading}
+                className="w-full py-3 rounded-xl bg-red-500 text-white font-semibold touch-manipulation text-sm">
+                {actionLoading?'Deleting…':'🗑️ Delete Entry + Donation'}
+              </button>
+              <button onClick={()=>handleDeleteSpecial(deleteSpecial.id, false)}
+                disabled={actionLoading}
+                className="w-full py-3 rounded-xl bg-orange-100 text-orange-700 font-semibold touch-manipulation text-sm">
+                Delete Entry Only (keep donation)
+              </button>
+              <button onClick={()=>setDeleteSpecial(null)}
+                className="w-full py-3 rounded-xl border-2 border-gray-200 text-gray-600 font-semibold touch-manipulation text-sm">
+                Cancel
               </button>
             </div>
           </div>

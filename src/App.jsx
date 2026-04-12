@@ -13,6 +13,7 @@ import ThankYouPage     from './pages/ThankYouPage'
 import LookupPage       from './pages/LookupPage'
 import SpecialListPage  from './pages/SpecialListPage'
 import SpecialFormPage  from './pages/SpecialFormPage'
+import HandoverPage     from './pages/HandoverPage'
 
 function VolunteerRoute({ children }) {
   const { collectorName } = useCollector()
@@ -48,6 +49,7 @@ function AppRoutes() {
       <Route path="/special"     element={<VolunteerRoute><SpecialListPage /></VolunteerRoute>} />
       <Route path="/special/new" element={<VolunteerRoute><SpecialFormPage /></VolunteerRoute>} />
       <Route path="/special/:id" element={<VolunteerRoute><SpecialFormPage /></VolunteerRoute>} />
+      <Route path="/handover"    element={<VolunteerRoute><HandoverPage /></VolunteerRoute>} />
 
       {/* ── Admin ── */}
       <Route path="/admin" element={<AdminRoute><AdminPage /></AdminRoute>} />

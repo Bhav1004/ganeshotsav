@@ -1,5 +1,5 @@
 import supabase from './supabase'
-import { BUILDINGS, WINGS, FLATS, DONATIONS, nextReceiptNo, SPECIAL_ENTRIES } from './mockData'
+import { BUILDINGS, WINGS, FLATS, DONATIONS, nextReceiptNo, SPECIAL_ENTRIES, HANDOVERS } from './mockData'
 
 const useMock = !import.meta.env.VITE_SUPABASE_URL
 
@@ -392,4 +392,78 @@ export async function getSpecialDonationByEntryId(specialEntryId) {
     return { data: DONATIONS.find(d => d.special_entry_id === specialEntryId) || null, error: null }
   }
   return supabase.from('donations').select('*').eq('special_entry_id', specialEntryId).maybeSingle()
+}
+
+// ─── Special Entry Edit / Delete ─────────────────────────────────────────────
+export async function editSpecialEntry(id, updates) {
+  if (useMock) {
+    const e = SPECIAL_ENTRIES.find(x => x.id === id)
+    if (e) Object.assign(e, updates)
+    return { error: null }
+  }
+  return supabase.from('special_entries').update(updates).eq('id', id)
+}
+
+export async function deleteSpecialEntry(id, deleteDonation = false) {
+  if (useMock) {
+    if (deleteDonation) {
+      const idx = DONATIONS.findIndex(d => d.special_entry_id === id)
+      if (idx !== -1) DONATIONS.splice(idx, 1)
+    }
+    const idx = SPECIAL_ENTRIES.findIndex(e => e.id === id)
+    if (idx !== -1) SPECIAL_ENTRIES.splice(idx, 1)
+    return { error: null }
+  }
+  if (deleteDonation) {
+    await supabase.from('donations').delete().eq('special_entry_id', id)
+  }
+  return supabase.from('special_entries').delete().eq('id', id)
+}
+
+// ─── Date-wise collection for volunteer ──────────────────────────────────────
+export async function getMyDailyCollection(volunteerName) {
+  if (useMock) {
+    const myDonations = DONATIONS.filter(d => d.collected_by === volunteerName)
+    return { data: myDonations, error: null }
+  }
+  const { data, error } = await supabase
+    .from('donations')
+    .select('*, flats(flat_number, wings(name, buildings(name))), special_entries(name, category)')
+    .eq('collected_by', volunteerName)
+    .order('created_at', { ascending: false })
+  return { data: data || [], error }
+}
+
+// ─── Handovers ────────────────────────────────────────────────────────────────
+export async function submitHandover(payload) {
+  if (useMock) {
+    const h = { id: crypto.randomUUID(), status: 'pending', created_at: new Date().toISOString(), ...payload }
+    HANDOVERS.push(h)
+    return { data: h, error: null }
+  }
+  return supabase.from('handovers').insert(payload).select().single()
+}
+
+export async function getHandovers() {
+  if (useMock) return { data: [...HANDOVERS].reverse(), error: null }
+  return supabase.from('handovers').select('*').order('created_at', { ascending: false })
+}
+
+export async function getMyHandovers(volunteerName) {
+  if (useMock) return { data: HANDOVERS.filter(h => h.volunteer_name === volunteerName), error: null }
+  return supabase.from('handovers')
+    .select('*')
+    .eq('volunteer_name', volunteerName)
+    .order('created_at', { ascending: false })
+}
+
+export async function confirmHandover(id) {
+  if (useMock) {
+    const h = HANDOVERS.find(x => x.id === id)
+    if (h) { h.status = 'confirmed'; h.confirmed_at = new Date().toISOString() }
+    return { error: null }
+  }
+  return supabase.from('handovers')
+    .update({ status: 'confirmed', confirmed_at: new Date().toISOString() })
+    .eq('id', id)
 }

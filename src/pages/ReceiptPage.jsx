@@ -143,6 +143,22 @@ export default function ReceiptPage({ publicMode = false }) {
     })
   }, [])
 
+  // Direct WhatsApp to donor — text only, opens their chat instantly
+  const handleWhatsAppDirect = () => {
+    const phone = donation.mobile ? donation.mobile.replace(/\D/g, '') : ''
+    if (!phone) return
+    const text =
+      `🙏 *BGMM Ganeshotsav 2026*\n\n` +
+      `*Receipt No:* ${donation.receipt_no}\n` +
+      `*Donor:* ${donation.donor_name}\n` +
+      `*Amount:* ₹${formatAmount(donation.amount)}\n` +
+      `*Payment:* ${donation.payment_mode}\n` +
+      `*Date:* ${formatDate(donation.created_at)}\n\n` +
+      `बाल गोपाळ मित्र मंडळ\n` +
+      `गणपती बाप्पा मोरया! 🙏`
+    window.open(`https://wa.me/91${phone}?text=${encodeURIComponent(text)}`, '_blank')
+  }
+
   const handleWhatsAppImage = async () => {
     setShareLoading(true)
     try {
@@ -383,10 +399,21 @@ export default function ReceiptPage({ publicMode = false }) {
 
         {/* ── ACTION BUTTONS ── */}
         <div className="no-print mt-4 space-y-3 pb-8">
-          <button onClick={handleWhatsAppImage} className="btn-success" disabled={shareLoading}>
+          {/* Direct WhatsApp — only if mobile was captured */}
+          {donation.mobile && (
+            <button onClick={handleWhatsAppDirect} className="btn-success">
+              <span className="flex items-center justify-center gap-2">
+                <MessageCircle size={18}/>
+                💬 Send to Donor's WhatsApp
+              </span>
+            </button>
+          )}
+
+          {/* Image share — always available */}
+          <button onClick={handleWhatsAppImage} className={donation.mobile ? 'btn-secondary' : 'btn-success'} disabled={shareLoading}>
             <span className="flex items-center justify-center gap-2">
               <MessageCircle size={18}/>
-              {shareLoading ? 'Preparing image…' : 'Share Receipt on WhatsApp'}
+              {shareLoading ? 'Preparing image…' : '📸 Share Receipt Image'}
             </span>
           </button>
 

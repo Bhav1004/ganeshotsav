@@ -61,3 +61,6 @@ export const SPECIAL_ENTRIES = [
   { id: 's3', name: 'Dr. Mehta Bungalow',   owner_name: 'Dr. A. Mehta',  category: 'Bungalow', area: 'Ganesh Chowk', status: 'pending', notes: '', created_by: '', created_at: new Date().toISOString() },
   { id: 's4', name: 'Councillor Joshi',     owner_name: 'P. Joshi',      category: 'VIP', area: 'Main Market', status: 'pending', notes: '', created_by: '', created_at: new Date().toISOString() },
 ]
+
+// ─── Handovers mock data ──────────────────────────────────────────────────────
+export const HANDOVERS = []

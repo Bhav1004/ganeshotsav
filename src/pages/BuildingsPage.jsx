@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Building2, ChevronRight, BarChart3, Search, Store } from 'lucide-react'
+import { Building2, ChevronRight, BarChart3, Search, Store, Wallet } from 'lucide-react'
 import Header from '../components/Header'
 import Spinner from '../components/Spinner'
 import { getBuildings } from '../api'
@@ -53,6 +53,11 @@ export default function BuildingsPage() {
           <button onClick={() => navigate('/special')}
             className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-dashed border-purple-300 text-purple-600 font-semibold text-sm active:scale-95 transition-transform touch-manipulation">
             <Store size={18} /> Special Collections (Shops / VIPs)
+          </button>
+
+          <button onClick={() => navigate('/handover')}
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-dashed border-green-400 text-green-700 font-semibold text-sm active:scale-95 transition-transform touch-manipulation">
+            <Wallet size={18} /> 💰 Submit Collection to Admin
           </button>
 
           <button onClick={() => navigate('/reports')}
