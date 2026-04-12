@@ -44,6 +44,7 @@ function PinField({ label, value, onChange, show, onToggle, placeholder }) {
 export default function SettingsPage() {
   const navigate = useNavigate()
   const { collectorName, collectorId, isAdmin, logout } = useCollector()
+  const backPath = isAdmin ? '/admin' : '/'
 
   // PIN change state
   const [oldPin, setOldPin]         = useState('')
@@ -96,8 +97,8 @@ export default function SettingsPage() {
     setTimeout(() => setPwSuccess(false), 4000)
   }
 
-  const handleLogout = () => {
-    logout()
+  const handleLogout = async () => {
+    await logout()
     navigate('/login', { replace: true })
   }
 

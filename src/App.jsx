@@ -28,6 +28,12 @@ function AdminRoute({ children }) {
   return children
 }
 
+function AnyAuthRoute({ children }) {
+  const { collectorName, isAdmin } = useCollector()
+  if (!collectorName && !isAdmin) return <Navigate to="/login" replace />
+  return children
+}
+
 function AppRoutes() {
   return (
     <Routes>
@@ -51,9 +57,9 @@ function AppRoutes() {
       <Route path="/special/new" element={<VolunteerRoute><SpecialFormPage /></VolunteerRoute>} />
       <Route path="/special/:id" element={<VolunteerRoute><SpecialFormPage /></VolunteerRoute>} />
       <Route path="/handover"    element={<VolunteerRoute><HandoverPage /></VolunteerRoute>} />
-      <Route path="/settings"    element={<VolunteerRoute><SettingsPage /></VolunteerRoute>} />
+      <Route path="/settings"    element={<AnyAuthRoute><SettingsPage /></AnyAuthRoute>} />
 
-      <Route path="/admin/settings" element={<AdminRoute><SettingsPage /></AdminRoute>} />
+      <Route path="/admin/settings" element={<AnyAuthRoute><SettingsPage /></AnyAuthRoute>} />
 
       {/* ── Admin ── */}
       <Route path="/admin" element={<AdminRoute><AdminPage /></AdminRoute>} />

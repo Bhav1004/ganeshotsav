@@ -4,7 +4,7 @@ import {
   IndianRupee, Users, Building2, RefreshCw, LogOut,
   TrendingUp, CheckCircle2, Banknote, Smartphone,
   Download, ChevronDown, ChevronUp, Unlock, Pencil,
-  Save, X, UserX, UserCheck, Plus, ShieldCheck, Send, Store
+  Save, X, UserX, UserCheck, Plus, ShieldCheck, Send, Store, Settings
 } from 'lucide-react'
 import { useCollector } from '../context/CollectorContext'
 import {
@@ -484,6 +484,9 @@ export default function AdminPage() {
           </button>
           <button onClick={exportCSV} className="p-2 rounded-xl bg-white/20 touch-manipulation" title="Export CSV">
             <Download size={18}/>
+          </button>
+          <button onClick={()=>navigate('/admin/settings')} className="p-2 rounded-xl bg-white/20 touch-manipulation" title="Settings">
+            <Settings size={18}/>
           </button>
           <button onClick={handleLogout} className="p-2 rounded-xl bg-white/20 touch-manipulation">
             <LogOut size={18}/>
