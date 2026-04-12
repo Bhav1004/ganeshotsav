@@ -1,10 +1,13 @@
 import { useNavigate } from 'react-router-dom'
-import { ChevronLeft, LogOut, BarChart3 } from 'lucide-react'
+import { ChevronLeft, LogOut, BarChart3, Settings } from 'lucide-react'
 import { useCollector } from '../context/CollectorContext'
+import { useLocation } from 'react-router-dom'
 
 export default function Header({ title, showBack = true, showReports = false }) {
-  const navigate = useNavigate()
-  const { collectorName, logout } = useCollector()
+  const navigate  = useNavigate()
+  const location  = useLocation()
+  const { collectorName, isAdmin, logout } = useCollector()
+  const settingsPath = isAdmin ? '/admin/settings' : '/settings'
 
   return (
     <header className="bg-gradient-to-r from-ganesh-deep to-ganesh-orange text-white sticky top-0 z-40 shadow-lg">
@@ -37,6 +40,13 @@ export default function Header({ title, showBack = true, showReports = false }) 
               <BarChart3 size={20} />
             </button>
           )}
+          <button
+            onClick={() => navigate(settingsPath)}
+            className="p-1.5 rounded-lg bg-white/20 active:bg-white/30 transition-colors touch-manipulation"
+            title="Settings"
+          >
+            <Settings size={18} />
+          </button>
           <button
             onClick={logout}
             className="p-1.5 rounded-lg bg-white/20 active:bg-white/30 transition-colors touch-manipulation"
