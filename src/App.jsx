@@ -1,16 +1,18 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { CollectorProvider, useCollector } from './context/CollectorContext'
-import LoginPage     from './pages/LoginPage'
-import BuildingsPage from './pages/BuildingsPage'
-import WingsPage     from './pages/WingsPage'
-import FlatsPage     from './pages/FlatsPage'
-import DonationForm  from './pages/DonationForm'
-import ReceiptPage   from './pages/ReceiptPage'
-import ReportsPage   from './pages/ReportsPage'
-import AdminPage     from './pages/AdminPage'
-import SearchPage    from './pages/SearchPage'
-import ThankYouPage  from './pages/ThankYouPage'
-import LookupPage    from './pages/LookupPage'
+import LoginPage        from './pages/LoginPage'
+import BuildingsPage    from './pages/BuildingsPage'
+import WingsPage        from './pages/WingsPage'
+import FlatsPage        from './pages/FlatsPage'
+import DonationForm     from './pages/DonationForm'
+import ReceiptPage      from './pages/ReceiptPage'
+import ReportsPage      from './pages/ReportsPage'
+import AdminPage        from './pages/AdminPage'
+import SearchPage       from './pages/SearchPage'
+import ThankYouPage     from './pages/ThankYouPage'
+import LookupPage       from './pages/LookupPage'
+import SpecialListPage  from './pages/SpecialListPage'
+import SpecialFormPage  from './pages/SpecialFormPage'
 
 function VolunteerRoute({ children }) {
   const { collectorName } = useCollector()
@@ -27,13 +29,12 @@ function AdminRoute({ children }) {
 function AppRoutes() {
   return (
     <Routes>
-      {/* ── Fully public – no login needed ── */}
-      <Route path="/login"              element={<LoginPage />} />
-      <Route path="/lookup"             element={<LookupPage />} />
-      {/* Public receipt view – donors access from WhatsApp/lookup */}
+      {/* ── Public ── */}
+      <Route path="/login"                   element={<LoginPage />} />
+      <Route path="/lookup"                  element={<LookupPage />} />
       <Route path="/receipt-view/:receiptNo" element={<ReceiptPage publicMode />} />
 
-      {/* ── Volunteer routes ── */}
+      {/* ── Volunteer ── */}
       <Route path="/"                            element={<VolunteerRoute><BuildingsPage /></VolunteerRoute>} />
       <Route path="/buildings/:buildingId/wings" element={<VolunteerRoute><WingsPage /></VolunteerRoute>} />
       <Route path="/wings/:wingId/flats"         element={<VolunteerRoute><FlatsPage /></VolunteerRoute>} />
@@ -43,7 +44,12 @@ function AppRoutes() {
       <Route path="/reports"                     element={<VolunteerRoute><ReportsPage /></VolunteerRoute>} />
       <Route path="/search"                      element={<VolunteerRoute><SearchPage /></VolunteerRoute>} />
 
-      {/* ── Admin routes ── */}
+      {/* ── Special Collections ── */}
+      <Route path="/special"     element={<VolunteerRoute><SpecialListPage /></VolunteerRoute>} />
+      <Route path="/special/new" element={<VolunteerRoute><SpecialFormPage /></VolunteerRoute>} />
+      <Route path="/special/:id" element={<VolunteerRoute><SpecialFormPage /></VolunteerRoute>} />
+
+      {/* ── Admin ── */}
       <Route path="/admin" element={<AdminRoute><AdminPage /></AdminRoute>} />
 
       <Route path="*" element={<Navigate to="/" replace />} />

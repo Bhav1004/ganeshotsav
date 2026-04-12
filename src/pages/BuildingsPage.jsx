@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Building2, ChevronRight, BarChart3, Search } from 'lucide-react'
+import { Building2, ChevronRight, BarChart3, Search, Store } from 'lucide-react'
 import Header from '../components/Header'
 import Spinner from '../components/Spinner'
 import { getBuildings } from '../api'
@@ -50,6 +50,11 @@ export default function BuildingsPage() {
             className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-dashed border-blue-300 text-blue-600 font-semibold text-sm active:scale-95 transition-transform touch-manipulation">
             <Search size={18} /> Search Donor / Receipt
           </button>
+          <button onClick={() => navigate('/special')}
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-dashed border-purple-300 text-purple-600 font-semibold text-sm active:scale-95 transition-transform touch-manipulation">
+            <Store size={18} /> Special Collections (Shops / VIPs)
+          </button>
+
           <button onClick={() => navigate('/reports')}
             className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-dashed border-orange-300 text-ganesh-orange font-semibold text-sm active:scale-95 transition-transform touch-manipulation">
             <BarChart3 size={18} /> View Collection Report (हिशोब)

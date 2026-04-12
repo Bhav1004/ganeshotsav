@@ -311,3 +311,86 @@ export async function getReportData() {
     pendingFlats: flats.filter(f => f.status === 'pending').length,
   }, error: null }
 }
+
+// ─── Special Entries ──────────────────────────────────────────────────────────
+import { SPECIAL_ENTRIES } from './mockData'
+
+export async function getSpecialEntries() {
+  if (useMock) return { data: SPECIAL_ENTRIES, error: null }
+  return supabase
+    .from('special_entries')
+    .select('*')
+    .order('category')
+    .order('name')
+}
+
+export async function addSpecialEntry(payload) {
+  if (useMock) {
+    const entry = { id: crypto.randomUUID(), status: 'pending', created_at: new Date().toISOString(), ...payload }
+    SPECIAL_ENTRIES.push(entry)
+    return { data: entry, error: null }
+  }
+  return supabase.from('special_entries').insert(payload).select().single()
+}
+
+export async function updateSpecialEntry(id, updates) {
+  if (useMock) {
+    const e = SPECIAL_ENTRIES.find(x => x.id === id)
+    if (e) Object.assign(e, updates)
+    return { error: null }
+  }
+  return supabase.from('special_entries').update(updates).eq('id', id)
+}
+
+export async function submitSpecialDonation(payload) {
+  // payload includes special_entry_id instead of flat_id
+  if (useMock) {
+    const receiptNo = nextReceiptNo()
+    const donation  = { id: crypto.randomUUID(), receipt_no: receiptNo, created_at: new Date().toISOString(), ...payload }
+    DONATIONS.push(donation)
+    const entry = SPECIAL_ENTRIES.find(e => e.id === payload.special_entry_id)
+    if (entry) entry.status = 'paid'
+    return { data: donation, error: null }
+  }
+  const { data: receiptData, error: rpcError } = await supabase.rpc('next_receipt_number')
+  if (rpcError) return { data: null, error: rpcError }
+  const { data: donation, error: donErr } = await supabase
+    .from('donations')
+    .insert({ ...payload, receipt_no: receiptData })
+    .select().single()
+  if (donErr) return { data: null, error: donErr }
+  await supabase.from('special_entries').update({ status: 'paid' }).eq('id', payload.special_entry_id)
+  return { data: donation, error: null }
+}
+
+export async function refuseSpecialEntry(id, collectorName, note = '') {
+  if (useMock) {
+    const e = SPECIAL_ENTRIES.find(x => x.id === id)
+    if (e) { e.status = 'refused'; e.notes = note }
+    return { error: null }
+  }
+  return supabase.from('special_entries')
+    .update({ status: 'refused', notes: note })
+    .eq('id', id)
+}
+
+export async function deleteSpecialDonationAndReset(donationId, specialEntryId) {
+  if (useMock) {
+    const idx = DONATIONS.findIndex(d => d.id === donationId)
+    if (idx !== -1) DONATIONS.splice(idx, 1)
+    const e = SPECIAL_ENTRIES.find(x => x.id === specialEntryId)
+    if (e) e.status = 'pending'
+    return { error: null }
+  }
+  const { error } = await supabase.from('donations').delete().eq('id', donationId)
+  if (error) return { error }
+  await supabase.from('special_entries').update({ status: 'pending' }).eq('id', specialEntryId)
+  return { error: null }
+}
+
+export async function getSpecialDonationByEntryId(specialEntryId) {
+  if (useMock) {
+    return { data: DONATIONS.find(d => d.special_entry_id === specialEntryId) || null, error: null }
+  }
+  return supabase.from('donations').select('*').eq('special_entry_id', specialEntryId).maybeSingle()
+}

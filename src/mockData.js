@@ -53,3 +53,11 @@ let receiptCounter = 1
 export function nextReceiptNo() {
   return `BGMM${String(receiptCounter++).padStart(5, '0')}`
 }
+
+// ─── Special Entries mock data ────────────────────────────────────────────────
+export const SPECIAL_ENTRIES = [
+  { id: 's1', name: 'Sharma General Store', owner_name: 'Ramesh Sharma', category: 'Shop', area: 'Main Market', status: 'pending', notes: '', created_by: '', created_at: new Date().toISOString() },
+  { id: 's2', name: 'Hotel Sai Palace',     owner_name: 'Suresh Patil',  category: 'Shop', area: 'Station Road', status: 'pending', notes: '', created_by: '', created_at: new Date().toISOString() },
+  { id: 's3', name: 'Dr. Mehta Bungalow',   owner_name: 'Dr. A. Mehta',  category: 'Bungalow', area: 'Ganesh Chowk', status: 'pending', notes: '', created_by: '', created_at: new Date().toISOString() },
+  { id: 's4', name: 'Councillor Joshi',     owner_name: 'P. Joshi',      category: 'VIP', area: 'Main Market', status: 'pending', notes: '', created_by: '', created_at: new Date().toISOString() },
+]
